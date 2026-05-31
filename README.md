@@ -39,12 +39,16 @@ bun run build
 - `NODE_TLS_REJECT_UNAUTHORIZED`
   - 若使用自簽章 HTTPS，設定 `0` 以允許繞過驗證
 
+> `.env.example` 僅供參考，建議在需要直接啟動 `src/index.ts` 或用 VS Code `launch.json` 偵錯時才建立 `.env`。
+
 ## 全域 VS Code MCP 設定
 
-`src/scripts/gen-config.ts` 會讀取專案根目錄下的 `.env`，並自動將 `azure-devops-server-mcp` 註冊到以下路徑：
+`src/scripts/gen-config.ts` 會將必要的 Azure DevOps 設定寫入 `.vscode/mcp.json`，並使用 VS Code `inputs` 綁定：
 
-- macOS / Linux: `~/.vscode/mcp.json`
-- Windows: `%USERPROFILE%\.vscode\mcp.json`
+- `AZURE_DEVOPS_URL` → `${input:azureDevOpsUrl}`
+- `AZURE_DEVOPS_TOKEN` → `${input:azureDevOpsToken}`
+- `AZURE_DEVOPS_API_VERSION` → `${input:azureDevOpsApiVersion}`
+- `NODE_TLS_REJECT_UNAUTHORIZED` → `${input:nodeTlsRejectUnauthorized}`
 
 若系統可用 Bun，會使用：
 
@@ -74,4 +78,4 @@ bun run build
 - `bun run build`
   - 針對 Node 目標建置 `src/index.ts` 到 `./dist`
 - `bun run gen-config`
-  - 讀取 `.env` 並更新全域 VS Code `mcp.json`
+  - 生成或更新工作區 `.vscode/mcp.json`

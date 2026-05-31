@@ -1,32 +1,8 @@
 import fs from "fs";
 import path from "path";
-import os from "os";
 import { spawnSync } from "child_process";
 
 const projectRoot = path.resolve(process.cwd());
-const envPath = path.join(projectRoot, ".env");
-const homeDir = os.homedir();
-
-function parseEnv(filePath: string): Record<string, string> {
-  if (!fs.existsSync(filePath)) {
-    console.error(`找不到 .env 檔案：${filePath}`);
-    process.exit(1);
-  }
-  const raw = fs.readFileSync(filePath, "utf8");
-  return Object.fromEntries(
-    raw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#") && line.includes("="))
-      .map((line) => {
-        const parts = line.split("=");
-        const key = parts.shift();
-        const value = parts.join("=");
-        return [key?.trim() ?? "", value.trim()];
-      })
-      .filter(([key]) => key !== ""),
-  );
-}
 
 function hasBun(): boolean {
   const result = spawnSync("bun", ["--version"], { stdio: "ignore" });
@@ -48,20 +24,11 @@ function showUsage(): void {
 
 function validateArgs(args: string[]): void {
   const invalid = args.filter(
-    (arg) =>
-      arg !== "--workspace" && arg !== "--help" && !arg.startsWith("--scope="),
+    (arg) => arg !== "--workspace" && arg !== "--help",
   );
   if (invalid.length > 0) {
     console.error(`不支援的參數: ${invalid.join(", ")}`);
     showUsage();
-  }
-  const scopeArg = args.find((arg) => arg.startsWith("--scope="));
-  if (scopeArg) {
-    const value = scopeArg.split("=")[1];
-    if (value !== "workspace") {
-      console.error(`不支援的 scope: ${value}。僅支援 workspace。`);
-      showUsage();
-    }
   }
 }
 
@@ -75,18 +42,9 @@ function main(): void {
     showUsage();
   }
   validateArgs(args);
-  const targetPath = getTargetPath();
-  const env = parseEnv(envPath);
-  const requiredKeys = ["AZURE_DEVOPS_URL", "AZURE_DEVOPS_TOKEN"];
-  const missingKeys = requiredKeys.filter((key) => !env[key]);
-  if (missingKeys.length > 0) {
-    console.error(
-      `缺少必要環境變數：${missingKeys.join(", ")}。請在 ${envPath} 中補上。`,
-    );
-    process.exit(1);
-  }
 
-  const apiVersion = env.AZURE_DEVOPS_API_VERSION || "7.1";
+  const targetPath = getTargetPath();
+  const apiVersion = "7.1";
   const bunAvailable = hasBun();
   const command = bunAvailable ? "bun" : "node";
   const runnerArgs = bunAvailable
@@ -133,8 +91,63 @@ function main(): void {
         ? (existingConfig.mcpServers as Record<string, unknown>)
         : {};
 
+  const existingInputsArray =
+    Array.isArray(existingConfig.inputs) &&
+    existingConfig.inputs.every((item) => typeof item === "object")
+      ? (existingConfig.inputs as Array<Record<string, unknown>>)
+      : [];
+
+  const existingInputsById = new Map<string, Record<string, unknown>>();
+  for (const input of existingInputsArray) {
+    if (input && typeof input.id === "string") {
+      existingInputsById.set(input.id, input);
+    }
+  }
+
+  const baseInputs = [
+    {
+      id: "azureDevOpsUrl",
+      type: "promptString",
+      description:
+        "Azure DevOps Server URL，例如 https://my-server/DefaultCollection",
+      default: "",
+    },
+    {
+      id: "azureDevOpsToken",
+      type: "promptString",
+      description: "Azure DevOps Personal Access Token",
+      default: "",
+    },
+    {
+      id: "azureDevOpsApiVersion",
+      type: "promptString",
+      description: "Azure DevOps API 版本",
+      default: apiVersion,
+    },
+    {
+      id: "nodeTlsRejectUnauthorized",
+      type: "promptString",
+      description: "若使用自簽章 HTTPS，輸入 0；留空則使用預設憑證驗證。",
+      default: "",
+    },
+  ];
+
+  const mergedInputs = [
+    ...baseInputs.map((input) => ({
+      ...input,
+      default: existingInputsById.get(input.id)?.default ?? input.default ?? "",
+    })),
+    ...existingInputsArray.filter(
+      (input) =>
+        input &&
+        typeof input.id === "string" &&
+        !baseInputs.some((base) => base.id === input.id),
+    ),
+  ];
+
   const mergedConfig = {
     ...existingConfig,
+    inputs: mergedInputs,
     servers: {
       ...existingServers,
       "azure-devops-server-mcp": {
@@ -142,12 +155,10 @@ function main(): void {
         command,
         args: runnerArgs,
         env: {
-          AZURE_DEVOPS_URL: env.AZURE_DEVOPS_URL,
-          AZURE_DEVOPS_TOKEN: env.AZURE_DEVOPS_TOKEN,
-          AZURE_DEVOPS_API_VERSION: apiVersion,
-          ...(env.NODE_TLS_REJECT_UNAUTHORIZED
-            ? { NODE_TLS_REJECT_UNAUTHORIZED: env.NODE_TLS_REJECT_UNAUTHORIZED }
-            : {}),
+          AZURE_DEVOPS_URL: "${input:azureDevOpsUrl}",
+          AZURE_DEVOPS_TOKEN: "${input:azureDevOpsToken}",
+          AZURE_DEVOPS_API_VERSION: "${input:azureDevOpsApiVersion}",
+          NODE_TLS_REJECT_UNAUTHORIZED: "${input:nodeTlsRejectUnauthorized}",
         },
       },
     },
