@@ -6,11 +6,6 @@ import { spawnSync } from "child_process";
 const projectRoot = path.resolve(process.cwd());
 const envPath = path.join(projectRoot, ".env");
 const homeDir = os.homedir();
-const vscodeDir =
-  process.platform === "win32"
-    ? path.join(process.env.USERPROFILE || homeDir, ".vscode")
-    : path.join(homeDir, ".vscode");
-const targetPath = path.join(vscodeDir, "mcp.json");
 
 function parseEnv(filePath: string): Record<string, string> {
   if (!fs.existsSync(filePath)) {
@@ -43,7 +38,50 @@ function writeConfig(configPath: string, content: unknown): void {
   fs.writeFileSync(configPath, `${JSON.stringify(content, null, 2)}\n`, "utf8");
 }
 
+function showUsage(): void {
+  console.error(
+    "用法: bun run src/scripts/gen-config.ts [--scope=user|workspace] [--help]",
+  );
+  console.error(
+    "  --scope=user      建立或更新使用者層級的 ~/.vscode/mcp.json",
+  );
+  console.error("  --scope=workspace 建立或更新工作區層級的 .vscode/mcp.json");
+  process.exit(0);
+}
+
+function parseScope(args: string[]): "user" | "workspace" {
+  const scopeArg = args.find((arg) => arg.startsWith("--scope="));
+  if (args.includes("--workspace")) {
+    return "workspace";
+  }
+  if (args.includes("--user") || args.includes("--global")) {
+    return "user";
+  }
+  if (scopeArg) {
+    const value = scopeArg.split("=")[1];
+    if (value === "workspace" || value === "user") {
+      return value;
+    }
+    console.error(`不支援的 scope: ${value}`);
+    showUsage();
+  }
+  return "user";
+}
+
+function getTargetPath(scope: "user" | "workspace"): string {
+  if (scope === "workspace") {
+    return path.join(projectRoot, ".vscode", "mcp.json");
+  }
+  const vscodeDir =
+    process.platform === "win32"
+      ? path.join(process.env.USERPROFILE || homeDir, ".vscode")
+      : path.join(homeDir, ".vscode");
+  return path.join(vscodeDir, "mcp.json");
+}
+
 function main(): void {
+  const scope = parseScope(process.argv.slice(2));
+  const targetPath = getTargetPath(scope);
   const env = parseEnv(envPath);
   const requiredKeys = ["AZURE_DEVOPS_URL", "AZURE_DEVOPS_TOKEN"];
   const missingKeys = requiredKeys.filter((key) => !env[key]);
@@ -57,7 +95,7 @@ function main(): void {
   const apiVersion = env.AZURE_DEVOPS_API_VERSION || "7.1";
   const bunAvailable = hasBun();
   const command = bunAvailable ? "bun" : "node";
-  const args = bunAvailable
+  const runnerArgs = bunAvailable
     ? ["run", path.join(projectRoot, "src/index.ts")]
     : [path.join(projectRoot, "dist/index.js")];
 
@@ -92,16 +130,23 @@ function main(): void {
     }
   }
 
+  const existingServers =
+    typeof existingConfig.servers === "object" &&
+    existingConfig.servers !== null
+      ? (existingConfig.servers as Record<string, unknown>)
+      : typeof existingConfig.mcpServers === "object" &&
+          existingConfig.mcpServers !== null
+        ? (existingConfig.mcpServers as Record<string, unknown>)
+        : {};
+
   const mergedConfig = {
     ...existingConfig,
-    mcpServers: {
-      ...(typeof existingConfig.mcpServers === "object" &&
-      existingConfig.mcpServers !== null
-        ? (existingConfig.mcpServers as Record<string, unknown>)
-        : {}),
+    servers: {
+      ...existingServers,
       "azure-devops-server-mcp": {
+        type: "stdio",
         command,
-        args,
+        args: runnerArgs,
         env: {
           AZURE_DEVOPS_URL: env.AZURE_DEVOPS_URL,
           AZURE_DEVOPS_TOKEN: env.AZURE_DEVOPS_TOKEN,
@@ -115,7 +160,7 @@ function main(): void {
   };
 
   writeConfig(targetPath, mergedConfig);
-  console.error(`已更新 VS Code 全域 MCP 設定：${targetPath}`);
+  console.error(`已更新 VS Code ${scope} MCP 設定：${targetPath}`);
 }
 
 main();

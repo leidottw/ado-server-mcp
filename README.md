@@ -16,10 +16,16 @@ bun install
 cp .env.example .env
 ```
 
-3. 產生 VS Code 全域 MCP 設定
+3. 產生 VS Code MCP 設定
 
 ```bash
-bun run src/scripts/gen-config.ts
+bun run src/scripts/gen-config.ts --scope=workspace
+```
+
+或建立使用者層級設定：
+
+```bash
+bun run src/scripts/gen-config.ts --scope=user
 ```
 
 4. 若使用 Node 版本執行，先編譯
