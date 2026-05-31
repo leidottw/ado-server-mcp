@@ -1,4 +1,5 @@
-import axios, { AxiosInstance } from "axios";
+import axios from "axios";
+import type { AxiosInstance } from "axios";
 import { z } from "zod";
 import { Agent as HttpsAgent } from "https";
 

@@ -1,5 +1,5 @@
 import type { AxiosInstance } from "axios";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
 
 export function registerPullRequestTools(

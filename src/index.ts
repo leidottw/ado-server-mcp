@@ -1,5 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { getAzureDevOpsClient } from "./client.js";
 import { registerProjectTools } from "./tools/projects.js";
 import { registerPullRequestTools } from "./tools/pullRequests.js";
