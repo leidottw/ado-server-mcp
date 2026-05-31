@@ -1,6 +1,21 @@
 import type { AxiosInstance } from "axios";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
+import { apiVersion } from "../client.js";
+import type {
+  AzureDevOpsWorkItem,
+  AzureDevOpsWorkItemRelation,
+  AzureDevOpsWiqlResult,
+  SupportedApiVersion,
+} from "../types/azureDevOps.js";
+import {
+  ensureArray,
+  ensureRecord,
+  createWorkItemOutputSchemaByVersion,
+  queryWorkItemsOutputSchemaByVersion,
+  updateWorkItemOutputSchemaByVersion,
+  workItemOutputSchemaByVersion,
+} from "../types/azureDevOps.js";
 
 const workItemIdSchema = z.union([
   z.string().regex(/^\d+$/).transform(Number),
@@ -18,27 +33,29 @@ export function registerWorkItemTools(
       inputSchema: {
         id: workItemIdSchema.describe("工作項目編號"),
       },
-      outputSchema: z.object({
-        id: z.number().nullable(),
-        title: z.string().nullable(),
-        state: z.string().nullable(),
-        assignedTo: z.string().nullable(),
-        fields: z.record(z.string(), z.any()),
-        url: z.string().nullable(),
-      }),
+      outputSchema:
+        workItemOutputSchemaByVersion[apiVersion as SupportedApiVersion],
     },
     async ({ id }: { id: number }) => {
       const response = await client.get(`wit/workitems/${id}`);
-      const fields = response.data?.fields ?? {};
+      const rawFields = response.data?.fields;
+      const fields = ensureRecord(rawFields);
       const assignedToRaw = fields["System.AssignedTo"];
+      const relations = ensureArray<AzureDevOpsWorkItemRelation>(
+        response.data?.relations,
+      );
       return {
         content: [],
         structuredContent: {
           id: response.data?.id,
-          title: fields["System.Title"],
-          state: fields["System.State"],
+          rev: response.data?.rev,
+          title: fields["System.Title"] ?? null,
+          state: fields["System.State"] ?? null,
           assignedTo: cleanAssignedTo(assignedToRaw),
           fields,
+          relations,
+          _links: response.data?._links ?? null,
+          commentVersionRef: response.data?.commentVersionRef ?? null,
           url: response.data?.url ?? null,
         },
       };
@@ -53,14 +70,11 @@ export function registerWorkItemTools(
         project: z.string().min(1).describe("專案名稱或 ID"),
         type: z.string().min(1).describe("工作項目類型，例如 Bug 或 Task"),
         fields: z
-          .record(z.string(), z.any())
+          .record(z.string(), z.unknown())
           .describe("欄位名稱與對應值的物件"),
       },
-      outputSchema: z.object({
-        id: z.number().nullable(),
-        url: z.string().nullable(),
-        fields: z.record(z.string(), z.any()),
-      }),
+      outputSchema:
+        createWorkItemOutputSchemaByVersion[apiVersion as SupportedApiVersion],
     },
     async ({
       project,
@@ -71,9 +85,11 @@ export function registerWorkItemTools(
       type: string;
       fields: Record<string, unknown>;
     }) => {
-      const operations = Object.entries(fields).map(([path, value]) => ({
+      const operations = Object.entries(fields).map(([fieldKey, value]) => ({
         op: "add",
-        path: `/fields/${path}`,
+        path: fieldKey.startsWith("/fields/")
+          ? fieldKey
+          : `/fields/${fieldKey}`,
         value,
       }));
       const response = await client.post(
@@ -92,6 +108,7 @@ export function registerWorkItemTools(
         content: [],
         structuredContent: {
           id: response.data?.id,
+          rev: response.data?.rev,
           url: response.data?.url ?? null,
           fields: response.data?.fields ?? {},
         },
@@ -107,16 +124,12 @@ export function registerWorkItemTools(
         id: workItemIdSchema.describe("工作項目編號"),
         state: z.string().optional().describe("新的工作項目狀態"),
         fields: z
-          .record(z.string(), z.any())
+          .record(z.string(), z.unknown())
           .optional()
           .describe("要更新的欄位資料"),
       },
-      outputSchema: z.object({
-        id: z.number().nullable(),
-        state: z.string().nullable(),
-        fields: z.record(z.string(), z.any()),
-        url: z.string().nullable(),
-      }),
+      outputSchema:
+        updateWorkItemOutputSchemaByVersion[apiVersion as SupportedApiVersion],
     },
     async ({
       id,
@@ -130,14 +143,20 @@ export function registerWorkItemTools(
       const operations = [] as Array<Record<string, unknown>>;
       if (state) {
         operations.push({
-          op: "add",
+          op: "replace",
           path: "/fields/System.State",
           value: state,
         });
       }
       if (fields) {
-        for (const [path, value] of Object.entries(fields)) {
-          operations.push({ op: "add", path: `/fields/${path}`, value });
+        for (const [fieldKey, value] of Object.entries(fields)) {
+          operations.push({
+            op: "replace",
+            path: fieldKey.startsWith("/fields/")
+              ? fieldKey
+              : `/fields/${fieldKey}`,
+            value,
+          });
         }
       }
       if (operations.length === 0) {
@@ -152,6 +171,7 @@ export function registerWorkItemTools(
         content: [],
         structuredContent: {
           id: response.data?.id,
+          rev: response.data?.rev,
           state: response.data?.fields?.["System.State"],
           fields: response.data?.fields ?? {},
           url: response.data?.url ?? null,
@@ -171,15 +191,8 @@ export function registerWorkItemTools(
           .describe("專案名稱或 ID，若留空則使用預設 Collection"),
         wiql: z.string().min(1).describe("WIQL 查詢字串"),
       },
-      outputSchema: z.object({
-        query: z.string(),
-        workItems: z.array(
-          z.object({
-            id: z.number().nullable(),
-            url: z.string().nullable(),
-          }),
-        ),
-      }),
+      outputSchema:
+        queryWorkItemsOutputSchemaByVersion[apiVersion as SupportedApiVersion],
     },
     async ({ project, wiql }: { project?: string; wiql: string }) => {
       const response = await client.post(
@@ -189,13 +202,18 @@ export function registerWorkItemTools(
           params: project ? { project } : undefined,
         },
       );
+      const wiqlResult = response.data as AzureDevOpsWiqlResult;
+      const workItems = ensureArray<{ id?: number; url?: string }>(
+        wiqlResult.workItems,
+      );
       return {
         content: [],
         structuredContent: {
           query: wiql,
-          workItems: (response.data?.workItems ?? []).map((item: any) => ({
-            id: item.id,
-            url: item.url,
+          queryResultUrl: wiqlResult.queryResultUrl ?? null,
+          workItems: workItems.map((item) => ({
+            id: item.id ?? null,
+            url: item.url ?? null,
           })),
         },
       };

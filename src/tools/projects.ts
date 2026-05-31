@@ -1,6 +1,20 @@
 import type { AxiosInstance } from "axios";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
+import { apiVersion } from "../client.js";
+import type {
+  AzureDevOpsListResponse,
+  AzureDevOpsProject,
+  AzureDevOpsTeam,
+  AzureDevOpsTeamMember,
+  SupportedApiVersion,
+} from "../types/azureDevOps.js";
+import {
+  ensureArray,
+  projectOutputSchemaByVersion,
+  projectTeamMemberOutputSchemaByVersion,
+  projectTeamOutputSchemaByVersion,
+} from "../types/azureDevOps.js";
 
 export function registerProjectTools(
   server: McpServer,
@@ -12,27 +26,34 @@ export function registerProjectTools(
       description: "列出 Collection 中可存取的專案清單",
       outputSchema: z.object({
         projects: z.array(
-          z.object({
-            id: z.string().nullable(),
-            name: z.string().nullable(),
-            description: z.string().nullable(),
-            state: z.string().nullable(),
-            url: z.string().nullable(),
-          }),
+          projectOutputSchemaByVersion[apiVersion as SupportedApiVersion],
         ),
       }),
     },
     async () => {
       const response = await client.get("projects");
+      const projects = ensureArray<AzureDevOpsProject>(
+        (
+          response.data as
+            | AzureDevOpsListResponse<AzureDevOpsProject>
+            | undefined
+        )?.value,
+      );
       return {
         content: [],
         structuredContent: {
-          projects: (response.data?.value ?? []).map((project: any) => ({
-            id: project.id,
-            name: project.name,
-            description: project.description,
-            state: project.state,
-            url: project.url,
+          projects: projects.map((project) => ({
+            id: project.id ?? null,
+            name: project.name ?? null,
+            description: project.description ?? null,
+            abbreviation: project.abbreviation ?? null,
+            url: project.url ?? null,
+            state: project.state ?? null,
+            visibility: project.visibility ?? null,
+            revision: project.revision ?? null,
+            defaultTeamImageUrl: project.defaultTeamImageUrl ?? null,
+            lastUpdateTime: project.lastUpdateTime ?? null,
+            defaultTeam: project.defaultTeam ?? null,
           })),
         },
       };
@@ -49,12 +70,7 @@ export function registerProjectTools(
       outputSchema: z.object({
         project: z.string(),
         teams: z.array(
-          z.object({
-            id: z.string().nullable(),
-            name: z.string().nullable(),
-            description: z.string().nullable(),
-            url: z.string().nullable(),
-          }),
+          projectTeamOutputSchemaByVersion[apiVersion as SupportedApiVersion],
         ),
       }),
     },
@@ -62,15 +78,23 @@ export function registerProjectTools(
       const response = await client.get(
         `projects/${encodeURIComponent(project)}/teams`,
       );
+      const teams = ensureArray<AzureDevOpsTeam>(
+        (response.data as AzureDevOpsListResponse<AzureDevOpsTeam> | undefined)
+          ?.value,
+      );
       return {
         content: [],
         structuredContent: {
           project,
-          teams: (response.data?.value ?? []).map((team: any) => ({
-            id: team.id,
-            name: team.name,
-            description: team.description,
-            url: team.url,
+          teams: teams.map((team) => ({
+            id: team.id ?? null,
+            name: team.name ?? null,
+            description: team.description ?? null,
+            url: team.url ?? null,
+            identityUrl: team.identityUrl ?? null,
+            projectId: team.projectId ?? null,
+            projectName: team.projectName ?? null,
+            isDeleted: team.isDeleted ?? null,
           })),
         },
       };
@@ -89,12 +113,9 @@ export function registerProjectTools(
         project: z.string(),
         teamId: z.string(),
         members: z.array(
-          z.object({
-            id: z.string().nullable(),
-            displayName: z.string().nullable(),
-            uniqueName: z.string().nullable(),
-            url: z.string().nullable(),
-          }),
+          projectTeamMemberOutputSchemaByVersion[
+            apiVersion as SupportedApiVersion
+          ],
         ),
       }),
     },
@@ -102,16 +123,28 @@ export function registerProjectTools(
       const response = await client.get(
         `projects/${encodeURIComponent(project)}/teams/${encodeURIComponent(teamId)}/members`,
       );
+      const members = ensureArray<AzureDevOpsTeamMember>(
+        (
+          response.data as
+            | AzureDevOpsListResponse<AzureDevOpsTeamMember>
+            | undefined
+        )?.value,
+      );
       return {
         content: [],
         structuredContent: {
           project,
           teamId,
-          members: (response.data?.value ?? []).map((member: any) => ({
-            id: member.id,
-            displayName: member.identity?.displayName ?? member.displayName,
-            uniqueName: member.identity?.uniqueName ?? member.uniqueName,
-            url: member.url,
+          members: members.map((member) => ({
+            id: member.id ?? null,
+            displayName:
+              member.identity?.displayName ?? member.displayName ?? null,
+            uniqueName:
+              member.identity?.uniqueName ?? member.uniqueName ?? null,
+            url: member.url ?? null,
+            imageUrl: member.identity?.imageUrl ?? member.imageUrl ?? null,
+            descriptor:
+              member.identity?.descriptor ?? member.descriptor ?? null,
           })),
         },
       };

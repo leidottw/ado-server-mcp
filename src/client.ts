@@ -8,10 +8,13 @@ const envSource =
     ? Bun.env
     : process.env;
 
+const supportedApiVersions = ["5.1", "6.0", "7.0", "7.1"] as const;
+const defaultApiVersion = "5.1";
+
 const envSchema = z.object({
   AZURE_DEVOPS_URL: z.string().min(1),
   AZURE_DEVOPS_TOKEN: z.string().min(1),
-  AZURE_DEVOPS_API_VERSION: z.string().default("7.1"),
+  AZURE_DEVOPS_API_VERSION: z.string().default(defaultApiVersion),
   NODE_TLS_REJECT_UNAUTHORIZED: z.string().optional(),
 });
 
@@ -23,10 +26,12 @@ const env = envSchema.parse({
 });
 
 const baseUrl = buildBaseUrl(env.AZURE_DEVOPS_URL);
-const apiVersion = env.AZURE_DEVOPS_API_VERSION ?? "7.1";
+export const apiVersion = resolveApiVersion(env.AZURE_DEVOPS_API_VERSION);
 
 if (env.NODE_TLS_REJECT_UNAUTHORIZED === "0") {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  console.warn(
+    "NODE_TLS_REJECT_UNAUTHORIZED=0 已啟用不安全 HTTPS 驗證，僅建議用於測試或內部環境。",
+  );
 }
 
 export function getAzureDevOpsClient(): AxiosInstance {
@@ -44,7 +49,44 @@ export function getAzureDevOpsClient(): AxiosInstance {
     validateStatus: (status) => status >= 200 && status < 300,
   });
 }
+function resolveApiVersion(rawVersion: string): string {
+  const normalized = rawVersion.trim();
+  if (
+    supportedApiVersions.includes(
+      normalized as (typeof supportedApiVersions)[number],
+    )
+  ) {
+    return normalized;
+  }
 
+  if (
+    normalized.toLowerCase() === "auto" ||
+    normalized.toLowerCase() === "latest"
+  ) {
+    console.warn(
+      `AZURE_DEVOPS_API_VERSION=${rawVersion} 會使用預設值 ${defaultApiVersion}。`,
+    );
+    return defaultApiVersion;
+  }
+
+  const majorMinorMatch = normalized.match(/^\d+\.\d+/)?.[0];
+  if (
+    majorMinorMatch &&
+    supportedApiVersions.includes(
+      majorMinorMatch as (typeof supportedApiVersions)[number],
+    )
+  ) {
+    console.warn(
+      `AZURE_DEVOPS_API_VERSION=${rawVersion} 未明確支援，將退回到 ${majorMinorMatch}。`,
+    );
+    return majorMinorMatch;
+  }
+
+  console.warn(
+    `不支援的 AZURE_DEVOPS_API_VERSION：${rawVersion}，已改為預設 ${defaultApiVersion}。支援版本：${supportedApiVersions.join(", ")}`,
+  );
+  return defaultApiVersion;
+}
 function buildBaseUrl(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl);

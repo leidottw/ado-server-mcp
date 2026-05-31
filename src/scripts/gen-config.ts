@@ -54,7 +54,7 @@ function main(): void {
   validateArgs(args);
 
   const targetPath = getTargetPath();
-  const apiVersion = "7.1";
+  const apiVersion = "5.1";
   const command = "node";
   const distEntry = path.join(packageRoot, "dist", "index.js");
   const runnerArgs = [distEntry];
@@ -126,7 +126,7 @@ function main(): void {
     {
       id: "azureDevOpsApiVersion",
       type: "promptString",
-      description: "Azure DevOps API 版本",
+      description: "Azure DevOps API 版本（支援 5.1/6.0/7.0/7.1）",
       default: apiVersion,
     },
     {
