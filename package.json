@@ -1,6 +1,5 @@
 {
   "name": "ado-server-mcp-6",
-  "module": "index.ts",
   "type": "module",
   "private": true,
   "bin": {
