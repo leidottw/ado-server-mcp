@@ -40,48 +40,42 @@ function writeConfig(configPath: string, content: unknown): void {
 
 function showUsage(): void {
   console.error(
-    "用法: bun run src/scripts/gen-config.ts [--scope=user|workspace] [--help]",
+    "用法: bun run src/scripts/gen-config.ts [--workspace] [--help]",
   );
-  console.error(
-    "  --scope=user      建立或更新使用者層級的 ~/.vscode/mcp.json",
-  );
-  console.error("  --scope=workspace 建立或更新工作區層級的 .vscode/mcp.json");
+  console.error("  --workspace  建立或更新工作區層級的 .vscode/mcp.json");
   process.exit(0);
 }
 
-function parseScope(args: string[]): "user" | "workspace" {
-  const scopeArg = args.find((arg) => arg.startsWith("--scope="));
-  if (args.includes("--workspace")) {
-    return "workspace";
-  }
-  if (args.includes("--user") || args.includes("--global")) {
-    return "user";
-  }
-  if (scopeArg) {
-    const value = scopeArg.split("=")[1];
-    if (value === "workspace" || value === "user") {
-      return value;
-    }
-    console.error(`不支援的 scope: ${value}`);
+function validateArgs(args: string[]): void {
+  const invalid = args.filter(
+    (arg) =>
+      arg !== "--workspace" && arg !== "--help" && !arg.startsWith("--scope="),
+  );
+  if (invalid.length > 0) {
+    console.error(`不支援的參數: ${invalid.join(", ")}`);
     showUsage();
   }
-  return "user";
+  const scopeArg = args.find((arg) => arg.startsWith("--scope="));
+  if (scopeArg) {
+    const value = scopeArg.split("=")[1];
+    if (value !== "workspace") {
+      console.error(`不支援的 scope: ${value}。僅支援 workspace。`);
+      showUsage();
+    }
+  }
 }
 
-function getTargetPath(scope: "user" | "workspace"): string {
-  if (scope === "workspace") {
-    return path.join(projectRoot, ".vscode", "mcp.json");
-  }
-  const vscodeDir =
-    process.platform === "win32"
-      ? path.join(process.env.USERPROFILE || homeDir, ".vscode")
-      : path.join(homeDir, ".vscode");
-  return path.join(vscodeDir, "mcp.json");
+function getTargetPath(): string {
+  return path.join(projectRoot, ".vscode", "mcp.json");
 }
 
 function main(): void {
-  const scope = parseScope(process.argv.slice(2));
-  const targetPath = getTargetPath(scope);
+  const args = process.argv.slice(2);
+  if (args.includes("--help")) {
+    showUsage();
+  }
+  validateArgs(args);
+  const targetPath = getTargetPath();
   const env = parseEnv(envPath);
   const requiredKeys = ["AZURE_DEVOPS_URL", "AZURE_DEVOPS_TOKEN"];
   const missingKeys = requiredKeys.filter((key) => !env[key]);
@@ -160,7 +154,7 @@ function main(): void {
   };
 
   writeConfig(targetPath, mergedConfig);
-  console.error(`已更新 VS Code ${scope} MCP 設定：${targetPath}`);
+  console.error(`已更新 VS Code workspace MCP 設定：${targetPath}`);
 }
 
 main();
