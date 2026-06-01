@@ -187,6 +187,7 @@ export function registerPullRequestTools(
           .describe("目標分支名稱，例如 refs/heads/main"),
         title: z.string().min(1).describe("拉取請求標題"),
         description: z.string().optional().describe("說明內容"),
+        isDraft: z.boolean().optional().describe("是否建立為草稿 PR"),
       },
       outputSchema:
         createPullRequestOutputSchemaByVersion[
@@ -199,12 +200,14 @@ export function registerPullRequestTools(
       targetRefName,
       title,
       description,
+      isDraft,
     }: {
       repositoryId: string;
       sourceRefName: string;
       targetRefName: string;
       title: string;
       description?: string;
+      isDraft?: boolean;
     }) => {
       const response = await client.post(
         `git/repositories/${encodeURIComponent(repositoryId)}/pullrequests`,
@@ -213,6 +216,7 @@ export function registerPullRequestTools(
           targetRefName,
           title,
           description: description ?? "",
+          isDraft: isDraft ?? false,
         },
       );
       return {
