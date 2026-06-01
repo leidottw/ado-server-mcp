@@ -522,46 +522,48 @@ export const updateWorkItemOutputSchemaByVersion = {
  * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.0
  * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1
  */
+const workItemRelationSchema = z.object({
+  rel: z.string().nullable(),
+  source: z
+    .object({ id: z.number().nullable(), url: z.string().nullable() })
+    .nullable(),
+  target: z
+    .object({ id: z.number().nullable(), url: z.string().nullable() })
+    .nullable(),
+});
+
 export const queryWorkItemsOutputSchemaByVersion = {
   "5.1": z.object({
     query: z.string(),
     queryResultUrl: z.string().nullable(),
     workItems: z.array(
-      z.object({
-        id: z.number().nullable(),
-        url: z.string().nullable(),
-      }),
+      z.object({ id: z.number().nullable(), url: z.string().nullable() }),
     ),
+    workItemRelations: z.array(workItemRelationSchema),
   }),
   "6.0": z.object({
     query: z.string(),
     queryResultUrl: z.string().nullable(),
     workItems: z.array(
-      z.object({
-        id: z.number().nullable(),
-        url: z.string().nullable(),
-      }),
+      z.object({ id: z.number().nullable(), url: z.string().nullable() }),
     ),
+    workItemRelations: z.array(workItemRelationSchema),
   }),
   "7.0": z.object({
     query: z.string(),
     queryResultUrl: z.string().nullable(),
     workItems: z.array(
-      z.object({
-        id: z.number().nullable(),
-        url: z.string().nullable(),
-      }),
+      z.object({ id: z.number().nullable(), url: z.string().nullable() }),
     ),
+    workItemRelations: z.array(workItemRelationSchema),
   }),
   "7.1": z.object({
     query: z.string(),
     queryResultUrl: z.string().nullable(),
     workItems: z.array(
-      z.object({
-        id: z.number().nullable(),
-        url: z.string().nullable(),
-      }),
+      z.object({ id: z.number().nullable(), url: z.string().nullable() }),
     ),
+    workItemRelations: z.array(workItemRelationSchema),
   }),
 } as const;
 
@@ -632,6 +634,7 @@ export const projectTeamMemberOutputSchemaByVersion = {
     url: z.string().nullable(),
     imageUrl: z.string().nullable(),
     descriptor: z.string().nullable(),
+    isTeamAdmin: z.boolean().nullable(),
   }),
   "6.0": z.object({
     id: z.string().nullable(),
@@ -640,6 +643,7 @@ export const projectTeamMemberOutputSchemaByVersion = {
     url: z.string().nullable(),
     imageUrl: z.string().nullable(),
     descriptor: z.string().nullable(),
+    isTeamAdmin: z.boolean().nullable(),
   }),
   "7.0": z.object({
     id: z.string().nullable(),
@@ -648,6 +652,7 @@ export const projectTeamMemberOutputSchemaByVersion = {
     url: z.string().nullable(),
     imageUrl: z.string().nullable(),
     descriptor: z.string().nullable(),
+    isTeamAdmin: z.boolean().nullable(),
   }),
   "7.1": z.object({
     id: z.string().nullable(),
@@ -656,6 +661,7 @@ export const projectTeamMemberOutputSchemaByVersion = {
     url: z.string().nullable(),
     imageUrl: z.string().nullable(),
     descriptor: z.string().nullable(),
+    isTeamAdmin: z.boolean().nullable(),
   }),
 } as const;
 
@@ -862,6 +868,7 @@ export interface AzureDevOpsTeamMember {
   url?: string;
   imageUrl?: string;
   descriptor?: string;
+  isTeamAdmin?: boolean;
   identity?: AzureDevOpsIdentityRef;
   _links?: AzureDevOpsReferenceLinks;
 }
@@ -994,6 +1001,11 @@ export interface AzureDevOpsWiqlResult {
     id?: number;
     url?: string;
   }>;
+  workItemRelations?: Array<{
+    rel?: string;
+    source?: { id?: number; url?: string };
+    target?: { id?: number; url?: string };
+  }>;
   queryResultUrl?: string;
 }
 
@@ -1006,3 +1018,122 @@ export function ensureRecord(value: unknown): Record<string, unknown> {
     ? (value as Record<string, unknown>)
     : {};
 }
+
+/**
+ * Pull request update schema.
+ */
+export const updatePullRequestOutputSchemaByVersion = {
+  "5.1": z.object({
+    pullRequestId: z.number().nullable(),
+    title: z.string().nullable(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "6.0": z.object({
+    pullRequestId: z.number().nullable(),
+    title: z.string().nullable(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "7.0": z.object({
+    pullRequestId: z.number().nullable(),
+    title: z.string().nullable(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "7.1": z.object({
+    pullRequestId: z.number().nullable(),
+    title: z.string().nullable(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+} as const;
+
+/**
+ * Pull request thread update schema.
+ */
+export const updatePullRequestThreadOutputSchemaByVersion = {
+  "5.1": z.object({
+    id: z.number().nullable(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "6.0": z.object({
+    id: z.number().nullable(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "7.0": z.object({
+    id: z.number().nullable(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "7.1": z.object({
+    id: z.number().nullable(),
+    status: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+} as const;
+
+/**
+ * Work items batch schema.
+ */
+const batchWorkItemSchema = z.object({
+  id: z.number().nullable(),
+  rev: z.number().nullable(),
+  fields: z.record(z.string(), z.unknown()),
+  url: z.string().nullable(),
+});
+
+export const batchWorkItemsOutputSchemaByVersion = {
+  "5.1": z.object({ workItems: z.array(batchWorkItemSchema) }),
+  "6.0": z.object({ workItems: z.array(batchWorkItemSchema) }),
+  "7.0": z.object({ workItems: z.array(batchWorkItemSchema) }),
+  "7.1": z.object({ workItems: z.array(batchWorkItemSchema) }),
+} as const;
+
+/**
+ * Work item types list schema.
+ */
+const workItemTypeSchema = z.object({
+  name: z.string().nullable(),
+  description: z.string().nullable(),
+  url: z.string().nullable(),
+});
+
+export const workItemTypesOutputSchemaByVersion = {
+  "5.1": z.object({ workItemTypes: z.array(workItemTypeSchema) }),
+  "6.0": z.object({ workItemTypes: z.array(workItemTypeSchema) }),
+  "7.0": z.object({ workItemTypes: z.array(workItemTypeSchema) }),
+  "7.1": z.object({ workItemTypes: z.array(workItemTypeSchema) }),
+} as const;
+
+/**
+ * Work item comment creation schema.
+ */
+export const addWorkItemCommentOutputSchemaByVersion = {
+  "5.1": z.object({
+    id: z.number().nullable(),
+    text: z.string().nullable(),
+    createdDate: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "6.0": z.object({
+    id: z.number().nullable(),
+    text: z.string().nullable(),
+    createdDate: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "7.0": z.object({
+    id: z.number().nullable(),
+    text: z.string().nullable(),
+    createdDate: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+  "7.1": z.object({
+    id: z.number().nullable(),
+    text: z.string().nullable(),
+    createdDate: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+} as const;

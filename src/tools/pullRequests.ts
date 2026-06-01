@@ -19,6 +19,8 @@ import {
   pullRequestSummaryOutputSchemaByVersion,
   pullRequestThreadOutputSchemaByVersion,
   repositoryOutputSchemaByVersion,
+  updatePullRequestOutputSchemaByVersion,
+  updatePullRequestThreadOutputSchemaByVersion,
 } from "../types/azureDevOps.js";
 
 export function registerPullRequestTools(
@@ -72,9 +74,29 @@ export function registerPullRequestTools(
   server.registerTool(
     "get_pull_requests",
     {
-      description: "取得指定專案下的所有 Git 拉取請求",
+      description: "取得指定專案下的 Git 拉取請求",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
+        status: z
+          .enum(["active", "abandoned", "completed", "all"])
+          .optional()
+          .describe("狀態篩選，預設為 active"),
+        repositoryId: z
+          .string()
+          .optional()
+          .describe("限定特定儲存庫 ID 或名稱"),
+        creatorId: z.string().optional().describe("建立者的身份 ID"),
+        reviewerId: z.string().optional().describe("審查者的身份 ID"),
+        sourceRefName: z
+          .string()
+          .optional()
+          .describe("來源分支，例如 refs/heads/feature"),
+        targetRefName: z
+          .string()
+          .optional()
+          .describe("目標分支，例如 refs/heads/main"),
+        top: z.number().int().positive().optional().describe("最多回傳筆數"),
+        skip: z.number().int().min(0).optional().describe("跳過筆數（分頁用）"),
       },
       outputSchema: z.object({
         project: z.string(),
@@ -85,10 +107,39 @@ export function registerPullRequestTools(
         ),
       }),
     },
-    async ({ project }: { project: string }) => {
-      const response = await client.get("git/pullrequests", {
-        params: { project },
-      });
+    async ({
+      project,
+      status,
+      repositoryId,
+      creatorId,
+      reviewerId,
+      sourceRefName,
+      targetRefName,
+      top,
+      skip,
+    }: {
+      project: string;
+      status?: string;
+      repositoryId?: string;
+      creatorId?: string;
+      reviewerId?: string;
+      sourceRefName?: string;
+      targetRefName?: string;
+      top?: number;
+      skip?: number;
+    }) => {
+      const params: Record<string, unknown> = { project };
+      if (status) params["searchCriteria.status"] = status;
+      if (repositoryId) params["searchCriteria.repositoryId"] = repositoryId;
+      if (creatorId) params["searchCriteria.creatorId"] = creatorId;
+      if (reviewerId) params["searchCriteria.reviewerId"] = reviewerId;
+      if (sourceRefName)
+        params["searchCriteria.sourceRefName"] = sourceRefName;
+      if (targetRefName)
+        params["searchCriteria.targetRefName"] = targetRefName;
+      if (top !== undefined) params["$top"] = top;
+      if (skip !== undefined) params["$skip"] = skip;
+      const response = await client.get("git/pullrequests", { params });
       const pullRequests = ensureArray<AzureDevOpsPullRequestSummary>(
         (
           response.data as
@@ -187,8 +238,10 @@ export function registerPullRequestTools(
           .describe("目標分支名稱，例如 refs/heads/main"),
         title: z.string().min(1).describe("拉取請求標題"),
         description: z.string().optional().describe("說明內容"),
-        isDraft: z.boolean().optional().describe("是否建立為草稿 PR"),
-      },
+        isDraft: z.boolean().optional().describe("是否建立為草稿 PR"),        reviewers: z
+          .array(z.string())
+          .optional()
+          .describe("審查者的身份 ID 清單"),      },
       outputSchema:
         createPullRequestOutputSchemaByVersion[
           apiVersion as SupportedApiVersion
@@ -201,6 +254,7 @@ export function registerPullRequestTools(
       title,
       description,
       isDraft,
+      reviewers,
     }: {
       repositoryId: string;
       sourceRefName: string;
@@ -208,6 +262,7 @@ export function registerPullRequestTools(
       title: string;
       description?: string;
       isDraft?: boolean;
+      reviewers?: string[];
     }) => {
       const response = await client.post(
         `git/repositories/${encodeURIComponent(repositoryId)}/pullrequests`,
@@ -217,6 +272,7 @@ export function registerPullRequestTools(
           title,
           description: description ?? "",
           isDraft: isDraft ?? false,
+          reviewers: reviewers?.map((id) => ({ id })) ?? [],
         },
       );
       return {
@@ -270,6 +326,113 @@ export function registerPullRequestTools(
         structuredContent: {
           threadId: response.data?.id,
           comments,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "update_pull_request",
+    {
+      description: "更新拉取請求（標題、說明、狀態、草稿模式）",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID 或名稱"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
+        title: z.string().optional().describe("新標題"),
+        description: z.string().optional().describe("新說明"),
+        status: z
+          .enum(["active", "abandoned", "completed"])
+          .optional()
+          .describe("更新狀態"),
+        isDraft: z.boolean().optional().describe("切換草稿模式"),
+      },
+      outputSchema:
+        updatePullRequestOutputSchemaByVersion[
+          apiVersion as SupportedApiVersion
+        ],
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+      title,
+      description,
+      status,
+      isDraft,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+      title?: string;
+      description?: string;
+      status?: string;
+      isDraft?: boolean;
+    }) => {
+      const body: Record<string, unknown> = {};
+      if (title !== undefined) body["title"] = title;
+      if (description !== undefined) body["description"] = description;
+      if (status !== undefined) body["status"] = status;
+      if (isDraft !== undefined) body["isDraft"] = isDraft;
+      const response = await client.patch(
+        `git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${pullRequestId}`,
+        body,
+      );
+      return {
+        content: [],
+        structuredContent: {
+          pullRequestId: response.data?.pullRequestId ?? null,
+          title: response.data?.title ?? null,
+          status: response.data?.status ?? null,
+          url: response.data?.url ?? null,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "update_pull_request_thread",
+    {
+      description: "更新拉取請求對話串狀態（例如標記為已解決）",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID 或名稱"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
+        threadId: z.number().int().positive().describe("對話串 ID"),
+        status: z
+          .enum([
+            "active",
+            "byPolicy",
+            "closed",
+            "fixed",
+            "pending",
+            "unknown",
+            "wontFix",
+          ])
+          .describe("新的對話串狀態"),
+      },
+      outputSchema:
+        updatePullRequestThreadOutputSchemaByVersion[
+          apiVersion as SupportedApiVersion
+        ],
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+      threadId,
+      status,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+      threadId: number;
+      status: string;
+    }) => {
+      const response = await client.patch(
+        `git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${pullRequestId}/threads/${threadId}`,
+        { status },
+      );
+      return {
+        content: [],
+        structuredContent: {
+          id: response.data?.id ?? null,
+          status: response.data?.status ?? null,
+          url: response.data?.url ?? null,
         },
       };
     },
