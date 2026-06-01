@@ -54,7 +54,7 @@ function main(): void {
   validateArgs(args);
 
   const targetPath = getTargetPath();
-  const apiVersion = "5.1";
+  const apiVersion = "7.0";
   const command = "node";
   const distEntry = path.join(packageRoot, "dist", "index.js");
   const runnerArgs = [distEntry];

@@ -9,7 +9,7 @@ const envSource =
     : process.env;
 
 const supportedApiVersions = ["5.1", "6.0", "7.0", "7.1"] as const;
-const defaultApiVersion = "5.1";
+const defaultApiVersion = "7.0";
 
 const envSchema = z.object({
   AZURE_DEVOPS_URL: z.string().min(1),
