@@ -1,24 +1,19 @@
-import type { AxiosInstance } from "axios";
+import type { ICoreApi } from "azure-devops-node-api/CoreApi";
+import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
+import type * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
-import { apiVersion } from "../client.js";
-import type {
-  AzureDevOpsListResponse,
-  AzureDevOpsProject,
-  AzureDevOpsTeam,
-  AzureDevOpsTeamMember,
-  SupportedApiVersion,
-} from "../types/azureDevOps.js";
 import {
   ensureArray,
-  projectOutputSchemaByVersion,
-  projectTeamMemberOutputSchemaByVersion,
-  projectTeamOutputSchemaByVersion,
+  normalizeAzureDevOpsDates,
+  projectOutputSchema,
+  projectTeamMemberOutputSchema,
+  projectTeamOutputSchema,
 } from "../types/azureDevOps.js";
 
 export function registerProjectTools(
   server: McpServer,
-  client: AxiosInstance,
+  coreApi: ICoreApi,
 ): void {
   server.registerTool(
     "list_projects",
@@ -26,16 +21,22 @@ export function registerProjectTools(
       description: "列出 Collection 中可存取的專案清單",
       inputSchema: {
         stateFilter: z
-          .enum(["all", "createPending", "deleted", "deleting", "new", "unchanged", "wellFormed"])
+          .enum([
+            "all",
+            "createPending",
+            "deleted",
+            "deleting",
+            "new",
+            "unchanged",
+            "wellFormed",
+          ])
           .optional()
           .describe("專案狀態篩選"),
         top: z.number().int().positive().optional().describe("最多回傳筆數"),
         skip: z.number().int().min(0).optional().describe("跳過筆數（分頁用）"),
       },
       outputSchema: z.object({
-        projects: z.array(
-          projectOutputSchemaByVersion[apiVersion as SupportedApiVersion],
-        ),
+        projects: z.array(projectOutputSchema),
       }),
     },
     async ({
@@ -47,37 +48,26 @@ export function registerProjectTools(
       top?: number;
       skip?: number;
     }) => {
-      const params: Record<string, unknown> = {};
-      if (stateFilter) params["stateFilter"] = stateFilter;
-      if (top !== undefined) params["$top"] = top;
-      if (skip !== undefined) params["$skip"] = skip;
-      const response = await client.get("projects", {
-        params: Object.keys(params).length > 0 ? params : undefined,
-      });
-      const projects = ensureArray<AzureDevOpsProject>(
-        (
-          response.data as
-            | AzureDevOpsListResponse<AzureDevOpsProject>
-            | undefined
-        )?.value,
-      );
+      const projects = await coreApi.getProjects(stateFilter, top, skip);
       return {
         content: [],
-        structuredContent: {
-          projects: projects.map((project) => ({
-            id: project.id ?? null,
-            name: project.name ?? null,
-            description: project.description ?? null,
-            abbreviation: project.abbreviation ?? null,
-            url: project.url ?? null,
-            state: project.state ?? null,
-            visibility: project.visibility ?? null,
-            revision: project.revision ?? null,
-            defaultTeamImageUrl: project.defaultTeamImageUrl ?? null,
-            lastUpdateTime: project.lastUpdateTime ?? null,
-            defaultTeam: project.defaultTeam ?? null,
-          })),
-        },
+        structuredContent: normalizeAzureDevOpsDates({
+          projects: ensureArray<CoreInterfaces.WebApiProject>(projects).map(
+            (project) => ({
+              id: project.id ?? undefined,
+              name: project.name ?? undefined,
+              description: project.description ?? undefined,
+              abbreviation: project.abbreviation ?? undefined,
+              url: project.url ?? undefined,
+              state: project.state ?? undefined,
+              visibility: project.visibility ?? undefined,
+              revision: project.revision ?? undefined,
+              defaultTeamImageUrl: project.defaultTeamImageUrl ?? undefined,
+              lastUpdateTime: project.lastUpdateTime ?? undefined,
+              defaultTeam: project.defaultTeam ?? undefined,
+            }),
+          ),
+        }),
       };
     },
   );
@@ -88,18 +78,13 @@ export function registerProjectTools(
       description: "取得指定專案底下的團隊列表",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
-        mine: z
-          .boolean()
-          .optional()
-          .describe("僅回傳我所屬的團隊"),
+        mine: z.boolean().optional().describe("僅回傳我所屬的團隊"),
         top: z.number().int().positive().optional().describe("最多回傳筆數"),
         skip: z.number().int().min(0).optional().describe("跳過筆數（分頁用）"),
       },
       outputSchema: z.object({
         project: z.string(),
-        teams: z.array(
-          projectTeamOutputSchemaByVersion[apiVersion as SupportedApiVersion],
-        ),
+        teams: z.array(projectTeamOutputSchema),
       }),
     },
     async ({
@@ -113,33 +98,21 @@ export function registerProjectTools(
       top?: number;
       skip?: number;
     }) => {
-      const params: Record<string, unknown> = {};
-      if (mine !== undefined) params["$mine"] = mine;
-      if (top !== undefined) params["$top"] = top;
-      if (skip !== undefined) params["$skip"] = skip;
-      const response = await client.get(
-        `projects/${encodeURIComponent(project)}/teams`,
-        { params: Object.keys(params).length > 0 ? params : undefined },
-      );
-      const teams = ensureArray<AzureDevOpsTeam>(
-        (response.data as AzureDevOpsListResponse<AzureDevOpsTeam> | undefined)
-          ?.value,
-      );
+      const teams = await coreApi.getTeams(project, mine, top, skip);
       return {
         content: [],
-        structuredContent: {
+        structuredContent: normalizeAzureDevOpsDates({
           project,
-          teams: teams.map((team) => ({
-            id: team.id ?? null,
-            name: team.name ?? null,
-            description: team.description ?? null,
-            url: team.url ?? null,
-            identityUrl: team.identityUrl ?? null,
-            projectId: team.projectId ?? null,
-            projectName: team.projectName ?? null,
-            isDeleted: team.isDeleted ?? null,
+          teams: ensureArray<CoreInterfaces.WebApiTeam>(teams).map((team) => ({
+            id: team.id ?? undefined,
+            name: team.name ?? undefined,
+            description: team.description ?? undefined,
+            url: team.url ?? undefined,
+            identityUrl: team.identityUrl ?? undefined,
+            projectId: team.projectId ?? undefined,
+            projectName: team.projectName ?? undefined,
           })),
-        },
+        }),
       };
     },
   );
@@ -157,11 +130,7 @@ export function registerProjectTools(
       outputSchema: z.object({
         project: z.string(),
         teamId: z.string(),
-        members: z.array(
-          projectTeamMemberOutputSchemaByVersion[
-            apiVersion as SupportedApiVersion
-          ],
-        ),
+        members: z.array(projectTeamMemberOutputSchema),
       }),
     },
     async ({
@@ -175,37 +144,32 @@ export function registerProjectTools(
       top?: number;
       skip?: number;
     }) => {
-      const params: Record<string, unknown> = {};
-      if (top !== undefined) params["$top"] = top;
-      if (skip !== undefined) params["$skip"] = skip;
-      const response = await client.get(
-        `projects/${encodeURIComponent(project)}/teams/${encodeURIComponent(teamId)}/members`,
-        { params: Object.keys(params).length > 0 ? params : undefined },
-      );
-      const members = ensureArray<AzureDevOpsTeamMember>(
-        (
-          response.data as
-            | AzureDevOpsListResponse<AzureDevOpsTeamMember>
-            | undefined
-        )?.value,
+      const members = await coreApi.getTeamMembersWithExtendedProperties(
+        teamId,
+        project,
+        top,
+        skip,
       );
       return {
         content: [],
         structuredContent: {
           project,
           teamId,
-          members: members.map((member) => ({
-            id: member.id ?? null,
-            displayName:
-              member.identity?.displayName ?? member.displayName ?? null,
-            uniqueName:
-              member.identity?.uniqueName ?? member.uniqueName ?? null,
-            url: member.url ?? null,
-            imageUrl: member.identity?.imageUrl ?? member.imageUrl ?? null,
-            descriptor:
-              member.identity?.descriptor ?? member.descriptor ?? null,
-            isTeamAdmin: member.isTeamAdmin ?? null,
-          })),
+          members: ensureArray<VSSInterfaces.TeamMember>(members).map(
+            (member) => ({
+              identity: member.identity
+                ? {
+                    id: member.identity.id ?? undefined,
+                    displayName: member.identity.displayName ?? undefined,
+                    uniqueName: member.identity.uniqueName ?? undefined,
+                    url: member.identity.url ?? undefined,
+                    imageUrl: member.identity.imageUrl ?? undefined,
+                    descriptor: member.identity.descriptor ?? undefined,
+                  }
+                : undefined,
+              isTeamAdmin: member.isTeamAdmin ?? undefined,
+            }),
+          ),
         },
       };
     },
@@ -218,29 +182,25 @@ export function registerProjectTools(
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
       },
-      outputSchema:
-        projectOutputSchemaByVersion[apiVersion as SupportedApiVersion],
+      outputSchema: projectOutputSchema,
     },
     async ({ project }: { project: string }) => {
-      const response = await client.get(
-        `projects/${encodeURIComponent(project)}`,
-      );
-      const p = response.data as AzureDevOpsProject;
+      const p = await coreApi.getProject(project);
       return {
         content: [],
-        structuredContent: {
-          id: p.id ?? null,
-          name: p.name ?? null,
-          description: p.description ?? null,
-          abbreviation: p.abbreviation ?? null,
-          url: p.url ?? null,
-          state: p.state ?? null,
-          visibility: p.visibility ?? null,
-          revision: p.revision ?? null,
-          defaultTeamImageUrl: p.defaultTeamImageUrl ?? null,
-          lastUpdateTime: p.lastUpdateTime ?? null,
-          defaultTeam: p.defaultTeam ?? null,
-        },
+        structuredContent: normalizeAzureDevOpsDates({
+          id: p.id ?? undefined,
+          name: p.name ?? undefined,
+          description: p.description ?? undefined,
+          abbreviation: p.abbreviation ?? undefined,
+          url: p.url ?? undefined,
+          state: p.state ?? undefined,
+          visibility: p.visibility ?? undefined,
+          revision: p.revision ?? undefined,
+          defaultTeamImageUrl: p.defaultTeamImageUrl ?? undefined,
+          lastUpdateTime: p.lastUpdateTime ?? undefined,
+          defaultTeam: p.defaultTeam ?? undefined,
+        }),
       };
     },
   );
@@ -253,25 +213,20 @@ export function registerProjectTools(
         project: z.string().min(1).describe("專案名稱或 ID"),
         teamId: z.string().min(1).describe("團隊 ID 或名稱"),
       },
-      outputSchema:
-        projectTeamOutputSchemaByVersion[apiVersion as SupportedApiVersion],
+      outputSchema: projectTeamOutputSchema,
     },
     async ({ project, teamId }: { project: string; teamId: string }) => {
-      const response = await client.get(
-        `projects/${encodeURIComponent(project)}/teams/${encodeURIComponent(teamId)}`,
-      );
-      const team = response.data as AzureDevOpsTeam;
+      const team = await coreApi.getTeam(project, teamId);
       return {
         content: [],
         structuredContent: {
-          id: team.id ?? null,
-          name: team.name ?? null,
-          description: team.description ?? null,
-          url: team.url ?? null,
-          identityUrl: team.identityUrl ?? null,
-          projectId: team.projectId ?? null,
-          projectName: team.projectName ?? null,
-          isDeleted: team.isDeleted ?? null,
+          id: team.id ?? undefined,
+          name: team.name ?? undefined,
+          description: team.description ?? undefined,
+          url: team.url ?? undefined,
+          identityUrl: team.identityUrl ?? undefined,
+          projectId: team.projectId ?? undefined,
+          projectName: team.projectName ?? undefined,
         },
       };
     },

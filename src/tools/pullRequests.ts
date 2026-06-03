@@ -1,31 +1,39 @@
-import type { AxiosInstance } from "axios";
+import type { IGitApi } from "azure-devops-node-api/GitApi";
+import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
-import { apiVersion } from "../client.js";
-import type {
-  AzureDevOpsComment,
-  AzureDevOpsCommentThread,
-  AzureDevOpsListResponse,
-  AzureDevOpsPullRequestDetail,
-  AzureDevOpsPullRequestSummary,
-  AzureDevOpsRepository,
-  SupportedApiVersion,
-} from "../types/azureDevOps.js";
 import {
   ensureArray,
-  createPullRequestCommentOutputSchemaByVersion,
-  createPullRequestOutputSchemaByVersion,
-  pullRequestDetailOutputSchemaByVersion,
-  pullRequestSummaryOutputSchemaByVersion,
-  pullRequestThreadOutputSchemaByVersion,
-  repositoryOutputSchemaByVersion,
-  updatePullRequestOutputSchemaByVersion,
-  updatePullRequestThreadOutputSchemaByVersion,
+  normalizeAzureDevOpsDates,
+  createPullRequestCommentOutputSchema,
+  createPullRequestOutputSchema,
+  pullRequestDetailOutputSchema,
+  pullRequestSummaryOutputSchema,
+  pullRequestThreadOutputSchema,
+  repositoryOutputSchema,
+  updatePullRequestOutputSchema,
 } from "../types/azureDevOps.js";
+
+function parseGitPullRequestStatus(
+  status?: "active" | "abandoned" | "completed" | "all",
+): GitInterfaces.PullRequestStatus | undefined {
+  switch (status) {
+    case "active":
+      return GitInterfaces.PullRequestStatus.Active;
+    case "abandoned":
+      return GitInterfaces.PullRequestStatus.Abandoned;
+    case "completed":
+      return GitInterfaces.PullRequestStatus.Completed;
+    case "all":
+      return GitInterfaces.PullRequestStatus.All;
+    default:
+      return undefined;
+  }
+}
 
 export function registerPullRequestTools(
   server: McpServer,
-  client: AxiosInstance,
+  gitApi: IGitApi,
 ): void {
   server.registerTool(
     "get_repositories",
@@ -36,35 +44,26 @@ export function registerPullRequestTools(
       },
       outputSchema: z.object({
         project: z.string(),
-        repositories: z.array(
-          repositoryOutputSchemaByVersion[apiVersion as SupportedApiVersion],
-        ),
+        repositories: z.array(repositoryOutputSchema),
       }),
     },
     async ({ project }: { project: string }) => {
-      const response = await client.get("git/repositories", {
-        params: { project },
-      });
-      const repositories = ensureArray<AzureDevOpsRepository>(
-        (
-          response.data as
-            | AzureDevOpsListResponse<AzureDevOpsRepository>
-            | undefined
-        )?.value,
-      );
+      const repositories = await gitApi.getRepositories(project);
       return {
         content: [],
         structuredContent: {
           project,
-          repositories: repositories.map((repo) => ({
-            id: repo.id ?? null,
-            name: repo.name ?? null,
-            url: repo.webUrl ?? repo.remoteUrl ?? null,
-            defaultBranch: repo.defaultBranch ?? null,
-            remoteUrl: repo.remoteUrl ?? null,
-            sshUrl: repo.sshUrl ?? null,
-            projectId: repo.project?.id ?? null,
-            projectName: repo.project?.name ?? null,
+          repositories: ensureArray<GitInterfaces.GitRepository>(
+            repositories,
+          ).map((repo) => ({
+            id: repo.id ?? undefined,
+            name: repo.name ?? undefined,
+            url: repo.webUrl ?? repo.remoteUrl ?? undefined,
+            defaultBranch: repo.defaultBranch ?? undefined,
+            remoteUrl: repo.remoteUrl ?? undefined,
+            sshUrl: repo.sshUrl ?? undefined,
+            projectId: repo.project?.id ?? undefined,
+            projectName: repo.project?.name ?? undefined,
           })),
         },
       };
@@ -100,11 +99,7 @@ export function registerPullRequestTools(
       },
       outputSchema: z.object({
         project: z.string(),
-        pullRequests: z.array(
-          pullRequestSummaryOutputSchemaByVersion[
-            apiVersion as SupportedApiVersion
-          ],
-        ),
+        pullRequests: z.array(pullRequestSummaryOutputSchema),
       }),
     },
     async ({
@@ -119,7 +114,7 @@ export function registerPullRequestTools(
       skip,
     }: {
       project: string;
-      status?: string;
+      status?: "active" | "abandoned" | "completed" | "all";
       repositoryId?: string;
       creatorId?: string;
       reviewerId?: string;
@@ -128,43 +123,41 @@ export function registerPullRequestTools(
       top?: number;
       skip?: number;
     }) => {
-      const params: Record<string, unknown> = { project };
-      if (status) params["searchCriteria.status"] = status;
-      if (repositoryId) params["searchCriteria.repositoryId"] = repositoryId;
-      if (creatorId) params["searchCriteria.creatorId"] = creatorId;
-      if (reviewerId) params["searchCriteria.reviewerId"] = reviewerId;
-      if (sourceRefName)
-        params["searchCriteria.sourceRefName"] = sourceRefName;
-      if (targetRefName)
-        params["searchCriteria.targetRefName"] = targetRefName;
-      if (top !== undefined) params["$top"] = top;
-      if (skip !== undefined) params["$skip"] = skip;
-      const response = await client.get("git/pullrequests", { params });
-      const pullRequests = ensureArray<AzureDevOpsPullRequestSummary>(
-        (
-          response.data as
-            | AzureDevOpsListResponse<AzureDevOpsPullRequestSummary>
-            | undefined
-        )?.value,
+      const searchCriteria: GitInterfaces.GitPullRequestSearchCriteria = {};
+      if (status && status !== "all") {
+        searchCriteria.status = parseGitPullRequestStatus(status);
+      }
+      if (repositoryId) searchCriteria.repositoryId = repositoryId;
+      if (creatorId) searchCriteria.creatorId = creatorId;
+      if (reviewerId) searchCriteria.reviewerId = reviewerId;
+      if (sourceRefName) searchCriteria.sourceRefName = sourceRefName;
+      if (targetRefName) searchCriteria.targetRefName = targetRefName;
+      const pullRequests = await gitApi.getPullRequestsByProject(
+        project,
+        searchCriteria,
+        undefined,
+        skip,
+        top,
       );
       return {
         content: [],
-        structuredContent: {
+        structuredContent: normalizeAzureDevOpsDates({
           project,
-          pullRequests: pullRequests.map((pr) => ({
-            pullRequestId: pr.pullRequestId ?? null,
-            repositoryId: pr.repository?.id ?? null,
-            title: pr.title ?? null,
-            status: pr.status ?? null,
-            sourceRefName: pr.sourceRefName ?? null,
-            targetRefName: pr.targetRefName ?? null,
-            creationDate: pr.creationDate ?? null,
-            mergeStatus: pr.mergeStatus ?? null,
-            createdBy:
-              pr.createdBy?.displayName ?? pr.createdBy?.uniqueName ?? null,
-            url: pr.url ?? null,
+          pullRequests: ensureArray<GitInterfaces.GitPullRequest>(
+            pullRequests,
+          ).map((pr) => ({
+            pullRequestId: pr.pullRequestId ?? undefined,
+            repositoryId: pr.repository?.id ?? undefined,
+            title: pr.title ?? undefined,
+            status: pr.status ?? undefined,
+            sourceRefName: pr.sourceRefName ?? undefined,
+            targetRefName: pr.targetRefName ?? undefined,
+            creationDate: pr.creationDate ?? undefined,
+            mergeStatus: pr.mergeStatus ?? undefined,
+            createdBy: pr.createdBy ?? undefined,
+            url: pr.url ?? undefined,
           })),
-        },
+        }),
       };
     },
   );
@@ -178,15 +171,8 @@ export function registerPullRequestTools(
         pullRequestId: z.number().int().positive().describe("拉取請求編號"),
       },
       outputSchema: z.object({
-        pullRequest:
-          pullRequestDetailOutputSchemaByVersion[
-            apiVersion as SupportedApiVersion
-          ],
-        threads: z.array(
-          pullRequestThreadOutputSchemaByVersion[
-            apiVersion as SupportedApiVersion
-          ],
-        ),
+        pullRequest: pullRequestDetailOutputSchema,
+        threads: z.array(pullRequestThreadOutputSchema),
       }),
     },
     async ({
@@ -196,28 +182,23 @@ export function registerPullRequestTools(
       repositoryId: string;
       pullRequestId: number;
     }) => {
-      const [detailResp, threadsResp] = await Promise.all([
-        client.get(
-          `git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${pullRequestId}`,
-        ),
-        client.get(
-          `git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${pullRequestId}/threads`,
-        ),
-      ]);
-      const pullRequest = detailResp.data as AzureDevOpsPullRequestDetail;
-      const threads = ensureArray<AzureDevOpsCommentThread>(
-        (
-          threadsResp.data as
-            | AzureDevOpsListResponse<AzureDevOpsCommentThread>
-            | undefined
-        )?.value,
+      const pullRequest = await gitApi.getPullRequest(
+        repositoryId,
+        pullRequestId,
+        undefined,
+      );
+      const threads = await gitApi.getThreads(
+        repositoryId,
+        pullRequestId,
+        undefined,
       );
       return {
         content: [],
-        structuredContent: {
-          pullRequest,
-          threads,
-        },
+        structuredContent: normalizeAzureDevOpsDates({
+          pullRequest: pullRequest as GitInterfaces.GitPullRequest,
+          threads:
+            ensureArray<GitInterfaces.GitPullRequestCommentThread>(threads),
+        }),
       };
     },
   );
@@ -238,14 +219,13 @@ export function registerPullRequestTools(
           .describe("目標分支名稱，例如 refs/heads/main"),
         title: z.string().min(1).describe("拉取請求標題"),
         description: z.string().optional().describe("說明內容"),
-        isDraft: z.boolean().optional().describe("是否建立為草稿 PR"),        reviewers: z
+        isDraft: z.boolean().optional().describe("是否建立為草稿 PR"),
+        reviewers: z
           .array(z.string())
           .optional()
-          .describe("審查者的身份 ID 清單"),      },
-      outputSchema:
-        createPullRequestOutputSchemaByVersion[
-          apiVersion as SupportedApiVersion
-        ],
+          .describe("審查者的身份 ID 清單"),
+      },
+      outputSchema: createPullRequestOutputSchema,
     },
     async ({
       repositoryId,
@@ -264,22 +244,24 @@ export function registerPullRequestTools(
       isDraft?: boolean;
       reviewers?: string[];
     }) => {
-      const response = await client.post(
-        `git/repositories/${encodeURIComponent(repositoryId)}/pullrequests`,
-        {
-          sourceRefName,
-          targetRefName,
-          title,
-          description: description ?? "",
-          isDraft: isDraft ?? false,
-          reviewers: reviewers?.map((id) => ({ id })) ?? [],
-        },
+      const gitPullRequest: GitInterfaces.GitPullRequest = {
+        sourceRefName,
+        targetRefName,
+        title,
+        description: description ?? "",
+        isDraft: isDraft ?? false,
+        reviewers: reviewers?.map((id) => ({ id })) ?? [],
+      };
+      const response = await gitApi.createPullRequest(
+        gitPullRequest,
+        repositoryId,
+        undefined,
       );
       return {
         content: [],
         structuredContent: {
-          pullRequestId: response.data?.pullRequestId,
-          url: response.data?.url ?? null,
+          pullRequestId: response?.pullRequestId,
+          url: response?.url ?? undefined,
         },
       };
     },
@@ -294,10 +276,7 @@ export function registerPullRequestTools(
         pullRequestId: z.number().int().positive().describe("拉取請求編號"),
         content: z.string().min(1).describe("評論內容"),
       },
-      outputSchema:
-        createPullRequestCommentOutputSchemaByVersion[
-          apiVersion as SupportedApiVersion
-        ],
+      outputSchema: createPullRequestCommentOutputSchema,
     },
     async ({
       repositoryId,
@@ -308,25 +287,29 @@ export function registerPullRequestTools(
       pullRequestId: number;
       content: string;
     }) => {
-      const response = await client.post(
-        `git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${pullRequestId}/threads`,
-        {
-          comments: [
-            {
-              parentCommentId: 0,
-              content,
-              commentType: 1,
-            },
-          ],
-        },
+      const newThread: GitInterfaces.GitPullRequestCommentThread = {
+        comments: [
+          {
+            parentCommentId: 0,
+            content,
+            commentType: 1,
+          },
+        ],
+      };
+      const response = await gitApi.createThread(
+        newThread,
+        repositoryId,
+        pullRequestId,
+        undefined,
       );
-      const comments = ensureArray<AzureDevOpsComment>(response.data?.comments);
+      const comments = ensureArray<GitInterfaces.Comment>(response?.comments);
       return {
         content: [],
-        structuredContent: {
-          threadId: response.data?.id,
+        structuredContent: normalizeAzureDevOpsDates({
+          id: response?.id ?? undefined,
+          status: response?.status ?? undefined,
           comments,
-        },
+        }),
       };
     },
   );
@@ -346,10 +329,7 @@ export function registerPullRequestTools(
           .describe("更新狀態"),
         isDraft: z.boolean().optional().describe("切換草稿模式"),
       },
-      outputSchema:
-        updatePullRequestOutputSchemaByVersion[
-          apiVersion as SupportedApiVersion
-        ],
+      outputSchema: updatePullRequestOutputSchema,
     },
     async ({
       repositoryId,
@@ -363,76 +343,27 @@ export function registerPullRequestTools(
       pullRequestId: number;
       title?: string;
       description?: string;
-      status?: string;
+      status?: "active" | "abandoned" | "completed";
       isDraft?: boolean;
     }) => {
-      const body: Record<string, unknown> = {};
-      if (title !== undefined) body["title"] = title;
-      if (description !== undefined) body["description"] = description;
-      if (status !== undefined) body["status"] = status;
-      if (isDraft !== undefined) body["isDraft"] = isDraft;
-      const response = await client.patch(
-        `git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${pullRequestId}`,
-        body,
+      const body: Partial<GitInterfaces.GitPullRequest> = {};
+      if (title !== undefined) body.title = title;
+      if (description !== undefined) body.description = description;
+      if (status !== undefined) body.status = parseGitPullRequestStatus(status);
+      if (isDraft !== undefined) body.isDraft = isDraft;
+      const response = await gitApi.updatePullRequest(
+        body as GitInterfaces.GitPullRequest,
+        repositoryId,
+        pullRequestId,
+        undefined,
       );
       return {
         content: [],
         structuredContent: {
-          pullRequestId: response.data?.pullRequestId ?? null,
-          title: response.data?.title ?? null,
-          status: response.data?.status ?? null,
-          url: response.data?.url ?? null,
-        },
-      };
-    },
-  );
-
-  server.registerTool(
-    "update_pull_request_thread",
-    {
-      description: "更新拉取請求對話串狀態（例如標記為已解決）",
-      inputSchema: {
-        repositoryId: z.string().min(1).describe("儲存庫 ID 或名稱"),
-        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
-        threadId: z.number().int().positive().describe("對話串 ID"),
-        status: z
-          .enum([
-            "active",
-            "byPolicy",
-            "closed",
-            "fixed",
-            "pending",
-            "unknown",
-            "wontFix",
-          ])
-          .describe("新的對話串狀態"),
-      },
-      outputSchema:
-        updatePullRequestThreadOutputSchemaByVersion[
-          apiVersion as SupportedApiVersion
-        ],
-    },
-    async ({
-      repositoryId,
-      pullRequestId,
-      threadId,
-      status,
-    }: {
-      repositoryId: string;
-      pullRequestId: number;
-      threadId: number;
-      status: string;
-    }) => {
-      const response = await client.patch(
-        `git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${pullRequestId}/threads/${threadId}`,
-        { status },
-      );
-      return {
-        content: [],
-        structuredContent: {
-          id: response.data?.id ?? null,
-          status: response.data?.status ?? null,
-          url: response.data?.url ?? null,
+          pullRequestId: response?.pullRequestId ?? undefined,
+          title: response?.title ?? undefined,
+          status: response?.status ?? undefined,
+          url: response?.url ?? undefined,
         },
       };
     },

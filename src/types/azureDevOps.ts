@@ -1,13 +1,12 @@
 import { z } from "zod";
+import * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 
 /**
- * Azure DevOps REST API schema mappings.
+ * Azure DevOps schema mappings derived from the installed
+ * azure-devops-node-api package (v15.1.2).
  *
- * Sources are provided above each schema definition.
+ * Schema definitions are based on corresponding SDK interfaces.
  */
-export const SUPPORTED_API_VERSIONS = ["5.1", "6.0", "7.0", "7.1"] as const;
-export type SupportedApiVersion = (typeof SUPPORTED_API_VERSIONS)[number];
-
 export interface AzureDevOpsListResponse<T> {
   count?: number;
   value?: T[];
@@ -15,999 +14,572 @@ export interface AzureDevOpsListResponse<T> {
 }
 
 /**
- * Projects list schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1
+ * Azure DevOps identity reference.
+ * Derived from azure-devops-node-api interfaces/common/VSSInterfaces.d.ts - IdentityRef
  */
-export const projectOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    description: z.string().nullable(),
-    url: z.string().nullable(),
-    state: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    description: z.string().nullable(),
-    url: z.string().nullable(),
-    state: z.string().nullable(),
-    visibility: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    description: z.string().nullable(),
-    abbreviation: z.string().nullable(),
-    url: z.string().nullable(),
-    state: z.string().nullable(),
-    visibility: z.string().nullable(),
-    revision: z.number().nullable(),
-    defaultTeamImageUrl: z.string().nullable(),
-    lastUpdateTime: z.string().nullable(),
-    defaultTeam: z
+const identityRefSchema = z
+  .object({
+    _links: z.record(z.string(), z.object({ href: z.string() })).optional(),
+    descriptor: z.string(),
+    displayName: z.string(),
+    url: z.string(),
+    id: z.string(),
+    imageUrl: z.string(),
+    directoryAlias: z.string(),
+    inactive: z.boolean(),
+    isAadIdentity: z.boolean(),
+    isContainer: z.boolean(),
+    isDeletedInOrigin: z.boolean(),
+    profileUrl: z.string(),
+    uniqueName: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+const resourceRefSchema = z
+  .object({
+    id: z.string(),
+    url: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+const identityRefWithVoteSchema: z.ZodSchema = identityRefSchema
+  .extend({
+    hasDeclined: z.boolean().optional(),
+    isFlagged: z.boolean().optional(),
+    isReapprove: z.boolean().optional(),
+    isRequired: z.boolean().optional(),
+    reviewerUrl: z.string().optional(),
+    vote: z.number().optional(),
+    votedFor: z.array(z.lazy(() => identityRefWithVoteSchema)).optional(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps team.
+ * Derived from azure-devops-node-api interfaces/CoreInterfaces.d.ts - WebApiTeam
+ */
+const webApiTeamSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    url: z.string(),
+    description: z.string(),
+    identity: z.record(z.string(), z.unknown()).optional(),
+    identityUrl: z.string(),
+    projectId: z.string(),
+    projectName: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps project reference.
+ * Derived from azure-devops-node-api interfaces/CoreInterfaces.d.ts - TeamProjectReference
+ */
+const teamProjectReferenceSchema = z
+  .object({
+    abbreviation: z.string(),
+    defaultTeamImageUrl: z.string(),
+    description: z.string(),
+    id: z.string(),
+    lastUpdateTime: z.string(),
+    name: z.string(),
+    revision: z.number(),
+    state: z.any(),
+    url: z.string(),
+    visibility: z.nativeEnum(CoreInterfaces.ProjectVisibility),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps repository reference.
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts - GitRepositoryRef
+ */
+const gitRepositoryRefSchema = z
+  .object({
+    collection: z
       .object({
-        id: z.string().nullable(),
-        name: z.string().nullable(),
-        url: z.string().nullable(),
+        id: z.string(),
+        name: z.string(),
+        url: z.string(),
       })
-      .nullable(),
-  }),
-  "7.1": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    description: z.string().nullable(),
-    abbreviation: z.string().nullable(),
-    url: z.string().nullable(),
-    state: z.string().nullable(),
-    visibility: z.string().nullable(),
-    revision: z.number().nullable(),
-    defaultTeamImageUrl: z.string().nullable(),
-    lastUpdateTime: z.string().nullable(),
-    defaultTeam: z
-      .object({
-        id: z.string().nullable(),
-        name: z.string().nullable(),
-        url: z.string().nullable(),
-      })
-      .nullable(),
-  }),
-} as const;
+      .optional(),
+    id: z.string(),
+    isFork: z.boolean(),
+    name: z.string(),
+    project: teamProjectReferenceSchema.optional(),
+    remoteUrl: z.string(),
+    sshUrl: z.string(),
+    url: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps repository.
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts - GitRepository
+ */
+const gitRepositorySchema = z
+  .object({
+    _links: z.any().optional(),
+    creationDate: z.string(),
+    defaultBranch: z.string(),
+    id: z.string(),
+    isDisabled: z.boolean(),
+    isFork: z.boolean(),
+    isInMaintenance: z.boolean(),
+    name: z.string(),
+    parentRepository: gitRepositoryRefSchema.optional(),
+    project: teamProjectReferenceSchema.optional(),
+    remoteUrl: z.string(),
+    size: z.number(),
+    sshUrl: z.string(),
+    url: z.string(),
+    validRemoteUrls: z.array(z.string()),
+    webUrl: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps pull request.
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts - GitPullRequest
+ */
+const gitPullRequestSchema = z
+  .object({
+    _links: z.any().optional(),
+    artifactId: z.string(),
+    autoCompleteSetBy: identityRefSchema.optional(),
+    closedBy: identityRefSchema.optional(),
+    closedDate: z.string(),
+    codeReviewId: z.number(),
+    commits: z.array(z.any()),
+    completionOptions: z.record(z.string(), z.unknown()),
+    completionQueueTime: z.string(),
+    createdBy: identityRefSchema.optional(),
+    creationDate: z.string(),
+    description: z.string(),
+    forkSource: z.any(),
+    hasMultipleMergeBases: z.boolean(),
+    ignoreTargetRefAndChooseDynamically: z.boolean(),
+    isDraft: z.boolean(),
+    labels: z.array(z.any()),
+    lastMergeCommit: z.any(),
+    lastMergeSourceCommit: z.any(),
+    lastMergeTargetCommit: z.any(),
+    mergeFailureMessage: z.string(),
+    mergeFailureType: z.any(),
+    mergeId: z.string(),
+    mergeOptions: z.record(z.string(), z.unknown()),
+    mergeStatus: z.any(),
+    pullRequestId: z.number(),
+    remoteUrl: z.string(),
+    repository: gitRepositorySchema.optional(),
+    reviewers: z.array(identityRefWithVoteSchema),
+    sourceRefName: z.string(),
+    status: z.any(),
+    supportsIterations: z.boolean(),
+    targetRefName: z.string(),
+    title: z.string(),
+    url: z.string(),
+    workItemRefs: z.array(resourceRefSchema),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps pull request comment.
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts - Comment
+ */
+const pullRequestCommentOutputSchema = z
+  .object({
+    _links: z.any().optional(),
+    id: z.number(),
+    parentCommentId: z.number(),
+    author: identityRefSchema.optional(),
+    content: z.string(),
+    commentType: z.number(),
+    isDeleted: z.boolean(),
+    lastContentUpdatedDate: z.string(),
+    lastUpdatedDate: z.string(),
+    publishedDate: z.string(),
+    usersLiked: z.array(identityRefSchema),
+  })
+  .partial()
+  .passthrough();
+
+const commentPositionSchema = z
+  .object({
+    line: z.number(),
+    offset: z.number(),
+  })
+  .partial()
+  .passthrough();
+
+const commentThreadContextSchema = z
+  .object({
+    filePath: z.string(),
+    leftFileEnd: commentPositionSchema.optional(),
+    leftFileStart: commentPositionSchema.optional(),
+    rightFileEnd: commentPositionSchema.optional(),
+    rightFileStart: commentPositionSchema.optional(),
+  })
+  .partial()
+  .passthrough();
+
+const commentIterationContextSchema = z
+  .object({
+    firstComparingIteration: z.number(),
+    secondComparingIteration: z.number(),
+  })
+  .partial()
+  .passthrough();
+
+const gitPullRequestCommentThreadContextSchema = z
+  .object({
+    changeTrackingId: z.number(),
+    iterationContext: commentIterationContextSchema.optional(),
+    trackingCriteria: z.record(z.string(), z.unknown()).optional(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps pull request thread.
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts - GitPullRequestCommentThread
+ */
+const pullRequestThreadOutputSchemaInternal = z
+  .object({
+    _links: z.any().optional(),
+    id: z.number(),
+    comments: z.array(pullRequestCommentOutputSchema),
+    identities: z.record(z.string(), identityRefSchema),
+    isDeleted: z.boolean(),
+    lastUpdatedDate: z.string(),
+    properties: z.record(z.string(), z.unknown()).optional(),
+    publishedDate: z.string(),
+    status: z.string(),
+    threadContext: commentThreadContextSchema.optional().nullable(), // 這裡發現與文件不相符, 實際測試發現可能為 null, 因此加上 nullable(),
+    pullRequestThreadContext: gitPullRequestCommentThreadContextSchema
+      .optional()
+      .nullable(), // 這裡發現與文件不相符, 實際測試發現可能為 null, 因此加上 nullable()
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps work item relation.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts - WorkItemRelation
+ */
+const workItemRelationSchema = z
+  .object({
+    rel: z.string(),
+    url: z.string(),
+    attributes: z.record(z.string(), z.unknown()).optional(),
+  })
+  .partial()
+  .passthrough();
+
+const workItemFieldReferenceSchema = z
+  .object({
+    name: z.string(),
+    referenceName: z.string(),
+    url: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+const workItemReferenceSchema = z
+  .object({
+    id: z.number(),
+    url: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+const workItemLinkSchema = z
+  .object({
+    rel: z.string(),
+    source: workItemReferenceSchema.optional(),
+    target: workItemReferenceSchema.optional(),
+  })
+  .partial()
+  .passthrough();
+
+const workItemQuerySortColumnSchema = z
+  .object({
+    descending: z.boolean(),
+    field: workItemFieldReferenceSchema.optional(),
+  })
+  .partial()
+  .passthrough();
+
+const workItemStateColorSchema = z
+  .object({
+    category: z.string(),
+    color: z.string(),
+    name: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+const workItemStateTransitionSchema = z
+  .object({
+    actions: z.array(z.string()),
+    to: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+const workItemTypeFieldInstanceBaseSchema = workItemFieldReferenceSchema
+  .extend({
+    alwaysRequired: z.boolean().optional(),
+    dependentFields: z.array(workItemFieldReferenceSchema).optional(),
+    helpText: z.string().optional(),
+  })
+  .partial();
+
+const workItemTypeFieldInstanceSchema = workItemTypeFieldInstanceBaseSchema
+  .extend({
+    allowedValues: z.array(z.string()).optional(),
+    defaultValue: z.string().optional(),
+  })
+  .partial();
+
+/**
+ * Azure DevOps work item comment version reference.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts - WorkItemCommentVersionRef
+ */
+const workItemCommentVersionRefSchema = z
+  .object({
+    commentId: z.number(),
+    createdInRevision: z.number(),
+    isDeleted: z.boolean(),
+    text: z.string(),
+    url: z.string(),
+    version: z.number(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps work item.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts - WorkItem
+ */
+const workItemSchema = z
+  .object({
+    id: z.number(),
+    rev: z.number(),
+    fields: z.record(z.string(), z.unknown()).optional(),
+    relations: z.array(workItemRelationSchema).optional(),
+    _links: z.record(z.string(), z.object({ href: z.string() })).optional(),
+    commentVersionRef: workItemCommentVersionRefSchema.optional(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps work item type.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts - WorkItemType
+ */
+const workItemTypeSchema = z
+  .object({
+    _links: z.any().optional(),
+    name: z.string(),
+    description: z.string(),
+    icon: z.any().optional(),
+    color: z.string(),
+    fieldInstances: z.array(workItemTypeFieldInstanceSchema).optional(),
+    fields: z.array(workItemTypeFieldInstanceSchema).optional(),
+    isDisabled: z.boolean(),
+    referenceName: z.string(),
+    states: z.array(workItemStateColorSchema).optional(),
+    transitions: z
+      .record(z.string(), z.array(workItemStateTransitionSchema))
+      .optional(),
+    xmlForm: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps WIQL query result.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts - WorkItemQueryResult
+ */
+const workItemQueryResultSchema = z
+  .object({
+    asOf: z.string(),
+    columns: z.array(workItemFieldReferenceSchema).optional(),
+    queryResultType: z.number(),
+    queryType: z.number(),
+    sortColumns: z.array(workItemQuerySortColumnSchema).optional(),
+    workItemRelations: z.array(workItemLinkSchema).optional(),
+    workItems: z
+      .array(
+        z
+          .object({
+            id: z.number().optional(),
+            url: z.string().optional(),
+          })
+          .partial(),
+      )
+      .optional(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Azure DevOps work item comment.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts - WorkItemComment
+ */
+const workItemCommentSchema = z
+  .object({
+    _links: z.any().optional(),
+    format: z.any().optional(),
+    renderedText: z.string(),
+    revisedBy: identityRefSchema.optional(),
+    revisedDate: z.string(),
+    revision: z.number(),
+    text: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+/**
+ * Projects list schema.
+ * Derived from azure-devops-node-api interfaces/CoreInterfaces.d.ts
+ * - WebApiProject / TeamProjectReference
+ */
+export const projectOutputSchema = teamProjectReferenceSchema;
 
 /**
  * Repository schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/repositories/list?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/repositories/list?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/repositories/list?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/repositories/list?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
+ * - GitRepository
  */
-export const repositoryOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    url: z.string().nullable(),
-    defaultBranch: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    url: z.string().nullable(),
-    defaultBranch: z.string().nullable(),
-    remoteUrl: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    url: z.string().nullable(),
-    defaultBranch: z.string().nullable(),
-    remoteUrl: z.string().nullable(),
-    sshUrl: z.string().nullable(),
-    projectId: z.string().nullable(),
-    projectName: z.string().nullable(),
-  }),
-  "7.1": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    url: z.string().nullable(),
-    defaultBranch: z.string().nullable(),
-    remoteUrl: z.string().nullable(),
-    sshUrl: z.string().nullable(),
-    projectId: z.string().nullable(),
-    projectName: z.string().nullable(),
-  }),
-} as const;
+export const repositoryOutputSchema = gitRepositorySchema;
 
 /**
  * Pull request summary schema.
- * This is a normalized subset derived from the Git Pull Request list response.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests-by-project?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests-by-project?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests-by-project?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests-by-project?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
+ * - GitPullRequest
  */
-export const pullRequestSummaryOutputSchemaByVersion = {
-  "5.1": z.object({
-    pullRequestId: z.number().nullable(),
-    repositoryId: z.string().nullable(),
-    title: z.string().nullable(),
-    status: z.string().nullable(),
-    createdBy: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    pullRequestId: z.number().nullable(),
-    repositoryId: z.string().nullable(),
-    title: z.string().nullable(),
-    status: z.string().nullable(),
-    sourceRefName: z.string().nullable(),
-    targetRefName: z.string().nullable(),
-    createdBy: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    pullRequestId: z.number().nullable(),
-    repositoryId: z.string().nullable(),
-    title: z.string().nullable(),
-    status: z.string().nullable(),
-    sourceRefName: z.string().nullable(),
-    targetRefName: z.string().nullable(),
-    creationDate: z.string().nullable(),
-    mergeStatus: z.string().nullable(),
-    createdBy: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.1": z.object({
-    pullRequestId: z.number().nullable(),
-    repositoryId: z.string().nullable(),
-    title: z.string().nullable(),
-    status: z.string().nullable(),
-    sourceRefName: z.string().nullable(),
-    targetRefName: z.string().nullable(),
-    creationDate: z.string().nullable(),
-    mergeStatus: z.string().nullable(),
-    createdBy: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-} as const;
-
-const pullRequestCommentOutputSchema = z
-  .object({
-    id: z.number().nullable(),
-    parentCommentId: z.number().nullable(),
-    author: z
-      .object({
-        id: z.string().nullable(),
-        displayName: z.string().nullable(),
-        uniqueName: z.string().nullable(),
-        url: z.string().nullable(),
-      })
-      .nullable(),
-    content: z.string().nullable(),
-    commentType: z.number().nullable(),
-    isDeleted: z.boolean().nullable(),
-    publishedDate: z.string().nullable(),
-    lastUpdatedDate: z.string().nullable(),
-    url: z.string().nullable(),
-  })
-  .passthrough();
-
-const pullRequestReviewerOutputSchema = z
-  .object({
-    id: z.string().nullable(),
-    displayName: z.string().nullable(),
-    uniqueName: z.string().nullable(),
-    url: z.string().nullable(),
-  })
-  .passthrough();
+export const pullRequestSummaryOutputSchema = gitPullRequestSchema;
 
 /**
  * Pull request detail schema.
- * This is a normalized subset derived from the Git Pull Request response.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
+ * - GitPullRequest
  */
-export const pullRequestDetailOutputSchemaByVersion = {
-  "5.1": z
-    .object({
-      pullRequestId: z.number().nullable(),
-      title: z.string().nullable(),
-      description: z.string().nullable(),
-      status: z.string().nullable(),
-      sourceRefName: z.string().nullable(),
-      targetRefName: z.string().nullable(),
-      creationDate: z.string().nullable(),
-      mergeStatus: z.string().nullable(),
-      url: z.string().nullable(),
-      repository: z
-        .object({
-          id: z.string().nullable(),
-          name: z.string().nullable(),
-          url: z.string().nullable(),
-        })
-        .nullable(),
-      createdBy: z
-        .object({
-          id: z.string().nullable(),
-          displayName: z.string().nullable(),
-          uniqueName: z.string().nullable(),
-          url: z.string().nullable(),
-        })
-        .nullable(),
-      reviewers: z.array(pullRequestReviewerOutputSchema).nullable(),
-    })
-    .passthrough(),
-  "6.0": z
-    .object({
-      pullRequestId: z.number().nullable(),
-      title: z.string().nullable(),
-      description: z.string().nullable(),
-      status: z.string().nullable(),
-      sourceRefName: z.string().nullable(),
-      targetRefName: z.string().nullable(),
-      creationDate: z.string().nullable(),
-      mergeStatus: z.string().nullable(),
-      url: z.string().nullable(),
-      repository: z
-        .object({
-          id: z.string().nullable(),
-          name: z.string().nullable(),
-          url: z.string().nullable(),
-        })
-        .nullable(),
-      createdBy: z
-        .object({
-          id: z.string().nullable(),
-          displayName: z.string().nullable(),
-          uniqueName: z.string().nullable(),
-          url: z.string().nullable(),
-        })
-        .nullable(),
-      reviewers: z.array(pullRequestReviewerOutputSchema).nullable(),
-    })
-    .passthrough(),
-  "7.0": z
-    .object({
-      pullRequestId: z.number().nullable(),
-      title: z.string().nullable(),
-      description: z.string().nullable(),
-      status: z.string().nullable(),
-      sourceRefName: z.string().nullable(),
-      targetRefName: z.string().nullable(),
-      creationDate: z.string().nullable(),
-      mergeStatus: z.string().nullable(),
-      url: z.string().nullable(),
-      repository: z
-        .object({
-          id: z.string().nullable(),
-          name: z.string().nullable(),
-          url: z.string().nullable(),
-        })
-        .nullable(),
-      createdBy: z
-        .object({
-          id: z.string().nullable(),
-          displayName: z.string().nullable(),
-          uniqueName: z.string().nullable(),
-          url: z.string().nullable(),
-        })
-        .nullable(),
-      reviewers: z.array(pullRequestReviewerOutputSchema).nullable(),
-    })
-    .passthrough(),
-  "7.1": z
-    .object({
-      pullRequestId: z.number().nullable(),
-      title: z.string().nullable(),
-      description: z.string().nullable(),
-      status: z.string().nullable(),
-      sourceRefName: z.string().nullable(),
-      targetRefName: z.string().nullable(),
-      creationDate: z.string().nullable(),
-      mergeStatus: z.string().nullable(),
-      url: z.string().nullable(),
-      repository: z
-        .object({
-          id: z.string().nullable(),
-          name: z.string().nullable(),
-          url: z.string().nullable(),
-        })
-        .nullable(),
-      createdBy: z
-        .object({
-          id: z.string().nullable(),
-          displayName: z.string().nullable(),
-          uniqueName: z.string().nullable(),
-          url: z.string().nullable(),
-        })
-        .nullable(),
-      reviewers: z.array(pullRequestReviewerOutputSchema).nullable(),
-    })
-    .passthrough(),
-} as const;
+export const pullRequestDetailOutputSchema = gitPullRequestSchema;
 
 /**
  * Pull request thread schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/list?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
+ * - GitPullRequestCommentThread
  */
-export const pullRequestThreadOutputSchemaByVersion = {
-  "5.1": z
-    .object({
-      id: z.number().nullable(),
-      status: z.string().nullable(),
-      threadContext: z.record(z.string(), z.unknown()).optional(),
-      comments: z.array(pullRequestCommentOutputSchema),
-      properties: z.record(z.string(), z.unknown()).optional(),
-      url: z.string().nullable(),
-    })
-    .passthrough(),
-  "6.0": z
-    .object({
-      id: z.number().nullable(),
-      status: z.string().nullable(),
-      threadContext: z.record(z.string(), z.unknown()).optional(),
-      comments: z.array(pullRequestCommentOutputSchema),
-      properties: z.record(z.string(), z.unknown()).optional(),
-      url: z.string().nullable(),
-    })
-    .passthrough(),
-  "7.0": z
-    .object({
-      id: z.number().nullable(),
-      status: z.string().nullable(),
-      threadContext: z.record(z.string(), z.unknown()).optional(),
-      comments: z.array(pullRequestCommentOutputSchema),
-      properties: z.record(z.string(), z.unknown()).optional(),
-      url: z.string().nullable(),
-    })
-    .passthrough(),
-  "7.1": z
-    .object({
-      id: z.number().nullable(),
-      status: z.string().nullable(),
-      threadContext: z.record(z.string(), z.unknown()).optional(),
-      comments: z.array(pullRequestCommentOutputSchema),
-      properties: z.record(z.string(), z.unknown()).optional(),
-      url: z.string().nullable(),
-    })
-    .passthrough(),
-} as const;
+export const pullRequestThreadOutputSchema =
+  pullRequestThreadOutputSchemaInternal;
 
 /**
  * Pull request comment creation schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/create?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/create?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/create?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-threads/create?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
+ * - GitPullRequestCommentThread
  */
-export const createPullRequestCommentOutputSchemaByVersion = {
-  "5.1": z.object({
-    threadId: z.number().nullable(),
-    comments: z.array(pullRequestCommentOutputSchema),
-  }),
-  "6.0": z.object({
-    threadId: z.number().nullable(),
-    comments: z.array(pullRequestCommentOutputSchema),
-  }),
-  "7.0": z.object({
-    threadId: z.number().nullable(),
-    comments: z.array(pullRequestCommentOutputSchema),
-  }),
-  "7.1": z.object({
-    threadId: z.number().nullable(),
-    comments: z.array(pullRequestCommentOutputSchema),
-  }),
-} as const;
+export const createPullRequestCommentOutputSchema =
+  pullRequestThreadOutputSchemaInternal;
 
 /**
  * Pull request creation schema.
- * This is a normalized subset derived from the create pull request response.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/create?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/create?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/create?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/create?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
+ * - GitPullRequest
  */
-export const createPullRequestOutputSchemaByVersion = {
-  "5.1": z.object({
-    pullRequestId: z.number().nullable(),
-    url: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    pullRequestId: z.number().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    pullRequestId: z.number().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.1": z.object({
-    pullRequestId: z.number().nullable(),
-    url: z.string().nullable(),
-  }),
-} as const;
+export const createPullRequestOutputSchema = gitPullRequestSchema;
 
 /**
  * Work item create schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/create?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/create?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/create?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/create?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
+ * - WorkItem
  */
-export const createWorkItemOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    url: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-  }),
-  "6.0": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    url: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-  }),
-  "7.0": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    url: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-  }),
-  "7.1": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    url: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-  }),
-} as const;
+export const createWorkItemOutputSchema = workItemSchema;
 
 /**
  * Work item update schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/update?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/update?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/update?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/update?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
+ * - WorkItem
  */
-export const updateWorkItemOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    state: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-    url: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    state: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-    url: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    state: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-    url: z.string().nullable(),
-  }),
-  "7.1": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    state: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-    url: z.string().nullable(),
-  }),
-} as const;
+export const updateWorkItemOutputSchema = workItemSchema;
 
 /**
  * WIQL query schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
+ * - WorkItemQueryResult
  */
-const workItemRelationSchema = z.object({
-  rel: z.string().nullable(),
-  source: z
-    .object({ id: z.number().nullable(), url: z.string().nullable() })
-    .nullable(),
-  target: z
-    .object({ id: z.number().nullable(), url: z.string().nullable() })
-    .nullable(),
-});
-
-export const queryWorkItemsOutputSchemaByVersion = {
-  "5.1": z.object({
-    query: z.string(),
-    queryResultUrl: z.string().nullable(),
-    workItems: z.array(
-      z.object({ id: z.number().nullable(), url: z.string().nullable() }),
-    ),
-    workItemRelations: z.array(workItemRelationSchema),
-  }),
-  "6.0": z.object({
-    query: z.string(),
-    queryResultUrl: z.string().nullable(),
-    workItems: z.array(
-      z.object({ id: z.number().nullable(), url: z.string().nullable() }),
-    ),
-    workItemRelations: z.array(workItemRelationSchema),
-  }),
-  "7.0": z.object({
-    query: z.string(),
-    queryResultUrl: z.string().nullable(),
-    workItems: z.array(
-      z.object({ id: z.number().nullable(), url: z.string().nullable() }),
-    ),
-    workItemRelations: z.array(workItemRelationSchema),
-  }),
-  "7.1": z.object({
-    query: z.string(),
-    queryResultUrl: z.string().nullable(),
-    workItems: z.array(
-      z.object({ id: z.number().nullable(), url: z.string().nullable() }),
-    ),
-    workItemRelations: z.array(workItemRelationSchema),
-  }),
-} as const;
+export const queryWorkItemsOutputSchema = workItemQueryResultSchema;
 
 /**
  * Project teams schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/list?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/list?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/list?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/list?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/CoreInterfaces.d.ts
+ * - WebApiTeam
  */
-export const projectTeamOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    description: z.string().nullable(),
-    url: z.string().nullable(),
-    identityUrl: z.string().nullable(),
-    projectId: z.string().nullable(),
-    projectName: z.string().nullable(),
-    isDeleted: z.boolean().nullable(),
-  }),
-  "6.0": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    description: z.string().nullable(),
-    url: z.string().nullable(),
-    identityUrl: z.string().nullable(),
-    projectId: z.string().nullable(),
-    projectName: z.string().nullable(),
-    isDeleted: z.boolean().nullable(),
-  }),
-  "7.0": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    description: z.string().nullable(),
-    url: z.string().nullable(),
-    identityUrl: z.string().nullable(),
-    projectId: z.string().nullable(),
-    projectName: z.string().nullable(),
-    isDeleted: z.boolean().nullable(),
-  }),
-  "7.1": z.object({
-    id: z.string().nullable(),
-    name: z.string().nullable(),
-    description: z.string().nullable(),
-    url: z.string().nullable(),
-    identityUrl: z.string().nullable(),
-    projectId: z.string().nullable(),
-    projectName: z.string().nullable(),
-    isDeleted: z.boolean().nullable(),
-  }),
-} as const;
+export const projectTeamOutputSchema = webApiTeamSchema;
 
 /**
  * Project team member schema.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/get-team-members?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/get-team-members?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/get-team-members?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/get-team-members?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/common/VSSInterfaces.d.ts
+ * - TeamMember
  */
-export const projectTeamMemberOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.string().nullable(),
-    displayName: z.string().nullable(),
-    uniqueName: z.string().nullable(),
-    url: z.string().nullable(),
-    imageUrl: z.string().nullable(),
-    descriptor: z.string().nullable(),
-    isTeamAdmin: z.boolean().nullable(),
-  }),
-  "6.0": z.object({
-    id: z.string().nullable(),
-    displayName: z.string().nullable(),
-    uniqueName: z.string().nullable(),
-    url: z.string().nullable(),
-    imageUrl: z.string().nullable(),
-    descriptor: z.string().nullable(),
-    isTeamAdmin: z.boolean().nullable(),
-  }),
-  "7.0": z.object({
-    id: z.string().nullable(),
-    displayName: z.string().nullable(),
-    uniqueName: z.string().nullable(),
-    url: z.string().nullable(),
-    imageUrl: z.string().nullable(),
-    descriptor: z.string().nullable(),
-    isTeamAdmin: z.boolean().nullable(),
-  }),
-  "7.1": z.object({
-    id: z.string().nullable(),
-    displayName: z.string().nullable(),
-    uniqueName: z.string().nullable(),
-    url: z.string().nullable(),
-    imageUrl: z.string().nullable(),
-    descriptor: z.string().nullable(),
-    isTeamAdmin: z.boolean().nullable(),
-  }),
-} as const;
+export const projectTeamMemberOutputSchema = z
+  .object({
+    identity: identityRefSchema.optional(),
+    isTeamAdmin: z.boolean().optional(),
+  })
+  .partial()
+  .passthrough();
 
 /**
  * Work item get schema.
- * This is a normalized subset derived from the work item get response.
- * It includes title/state/assignedTo values extracted from the fields payload.
- * Sources:
- * - 5.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-item?view=azure-devops-rest-5.1
- * - 6.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-item?view=azure-devops-rest-6.0
- * - 7.0: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-item?view=azure-devops-rest-7.0
- * - 7.1: https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-item?view=azure-devops-rest-7.1
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
+ * - WorkItem
  */
-export const workItemOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    title: z.string().nullable(),
-    state: z.string().nullable(),
-    assignedTo: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-    relations: z.array(
-      z.object({
-        rel: z.string().nullable(),
-        url: z.string().nullable(),
-        attributes: z.record(z.string(), z.unknown()).nullable(),
-      }),
-    ),
-    _links: z
-      .record(z.string(), z.object({ href: z.string().nullable() }))
-      .nullable(),
-    commentVersionRef: z
-      .object({
-        commentId: z.number().nullable(),
-        createdInRevision: z.number().nullable(),
-        isDeleted: z.boolean().nullable(),
-        text: z.string().nullable(),
-        url: z.string().nullable(),
-        version: z.number().nullable(),
-      })
-      .nullable(),
-    url: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    title: z.string().nullable(),
-    state: z.string().nullable(),
-    assignedTo: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-    relations: z.array(
-      z.object({
-        rel: z.string().nullable(),
-        url: z.string().nullable(),
-        attributes: z.record(z.string(), z.unknown()).nullable(),
-      }),
-    ),
-    _links: z
-      .record(z.string(), z.object({ href: z.string().nullable() }))
-      .nullable(),
-    commentVersionRef: z
-      .object({
-        commentId: z.number().nullable(),
-        createdInRevision: z.number().nullable(),
-        isDeleted: z.boolean().nullable(),
-        text: z.string().nullable(),
-        url: z.string().nullable(),
-        version: z.number().nullable(),
-      })
-      .nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    title: z.string().nullable(),
-    state: z.string().nullable(),
-    assignedTo: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-    relations: z.array(
-      z.object({
-        rel: z.string().nullable(),
-        url: z.string().nullable(),
-        attributes: z.record(z.string(), z.unknown()).nullable(),
-      }),
-    ),
-    _links: z
-      .record(z.string(), z.object({ href: z.string().nullable() }))
-      .nullable(),
-    commentVersionRef: z
-      .object({
-        commentId: z.number().nullable(),
-        createdInRevision: z.number().nullable(),
-        isDeleted: z.boolean().nullable(),
-        text: z.string().nullable(),
-        url: z.string().nullable(),
-        version: z.number().nullable(),
-      })
-      .nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.1": z.object({
-    id: z.number().nullable(),
-    rev: z.number().nullable(),
-    title: z.string().nullable(),
-    state: z.string().nullable(),
-    assignedTo: z.string().nullable(),
-    fields: z.record(z.string(), z.unknown()),
-    relations: z.array(
-      z.object({
-        rel: z.string().nullable(),
-        url: z.string().nullable(),
-        attributes: z.record(z.string(), z.unknown()).nullable(),
-      }),
-    ),
-    _links: z
-      .record(z.string(), z.object({ href: z.string().nullable() }))
-      .nullable(),
-    commentVersionRef: z
-      .object({
-        commentId: z.number().nullable(),
-        createdInRevision: z.number().nullable(),
-        isDeleted: z.boolean().nullable(),
-        text: z.string().nullable(),
-        url: z.string().nullable(),
-        version: z.number().nullable(),
-      })
-      .nullable(),
-    url: z.string().nullable(),
-  }),
-} as const;
+export const workItemOutputSchema = workItemSchema;
 
-export type AzureDevOpsProjectV51 = z.infer<
-  (typeof projectOutputSchemaByVersion)["5.1"]
->;
-export type AzureDevOpsProjectV71 = z.infer<
-  (typeof projectOutputSchemaByVersion)["7.1"]
->;
-export type AzureDevOpsRepositoryV51 = z.infer<
-  (typeof repositoryOutputSchemaByVersion)["5.1"]
->;
-export type AzureDevOpsRepositoryV71 = z.infer<
-  (typeof repositoryOutputSchemaByVersion)["7.1"]
->;
-export type AzureDevOpsPullRequestSummaryV51 = z.infer<
-  (typeof pullRequestSummaryOutputSchemaByVersion)["5.1"]
->;
-export type AzureDevOpsPullRequestSummaryV71 = z.infer<
-  (typeof pullRequestSummaryOutputSchemaByVersion)["7.1"]
->;
-export type AzureDevOpsWorkItemV51 = z.infer<
-  (typeof workItemOutputSchemaByVersion)["5.1"]
->;
-export type AzureDevOpsWorkItemV71 = z.infer<
-  (typeof workItemOutputSchemaByVersion)["7.1"]
->;
+/**
+ * Pull request update schema.
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
+ * - GitPullRequest
+ */
+export const updatePullRequestOutputSchema = gitPullRequestSchema;
 
-export interface AzureDevOpsTeam {
-  id?: string;
-  name?: string;
-  description?: string;
-  url?: string;
-  identityUrl?: string;
-  projectId?: string;
-  projectName?: string;
-  isDeleted?: boolean;
-}
+/**
+ * Work items batch schema.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
+ * - WorkItem[]
+ */
+const batchWorkItemSchema = workItemSchema;
+export const batchWorkItemsOutputSchema = z
+  .object({ workItems: z.array(batchWorkItemSchema) })
+  .passthrough();
 
-export interface AzureDevOpsTeamReference {
-  id?: string;
-  name?: string;
-  url?: string;
-}
+/**
+ * Work item types list schema.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
+ * - WorkItemType
+ */
+export const workItemTypesOutputSchema = z
+  .object({ workItemTypes: z.array(workItemTypeSchema) })
+  .passthrough();
 
-export interface AzureDevOpsProject {
-  id?: string;
-  name?: string;
-  description?: string;
-  abbreviation?: string;
-  url?: string;
-  state?: string;
-  visibility?: string;
-  revision?: number;
-  defaultTeamImageUrl?: string;
-  lastUpdateTime?: string;
-  defaultTeam?: AzureDevOpsTeamReference;
-}
-
-export interface AzureDevOpsTeam {
-  id?: string;
-  name?: string;
-  description?: string;
-  url?: string;
-  identityUrl?: string;
-  projectId?: string;
-  projectName?: string;
-  isDeleted?: boolean;
-}
-
-export interface AzureDevOpsTeamMember {
-  id?: string;
-  displayName?: string;
-  uniqueName?: string;
-  url?: string;
-  imageUrl?: string;
-  descriptor?: string;
-  isTeamAdmin?: boolean;
-  identity?: AzureDevOpsIdentityRef;
-  _links?: AzureDevOpsReferenceLinks;
-}
-
-export interface AzureDevOpsReferenceLinks {
-  [rel: string]: {
-    href?: string;
-  };
-}
-
-export interface AzureDevOpsIdentityRef {
-  id?: string;
-  displayName?: string;
-  uniqueName?: string;
-  url?: string;
-  imageUrl?: string;
-  descriptor?: string;
-  _links?: AzureDevOpsReferenceLinks;
-}
-
-export interface AzureDevOpsRepositoryRef {
-  id?: string;
-  name?: string;
-  url?: string;
-  remoteUrl?: string;
-  sshUrl?: string;
-  project?: AzureDevOpsProject;
-  isFork?: boolean;
-  parentRepository?: AzureDevOpsRepositoryRef;
-  validRemoteUrls?: string[];
-  _links?: AzureDevOpsReferenceLinks;
-}
-
-export interface AzureDevOpsRepository {
-  id?: string;
-  name?: string;
-  url?: string;
-  project?: AzureDevOpsProject;
-  defaultBranch?: string;
-  remoteUrl?: string;
-  sshUrl?: string;
-  webUrl?: string;
-  isFork?: boolean;
-  parentRepository?: AzureDevOpsRepositoryRef;
-  validRemoteUrls?: string[];
-  _links?: AzureDevOpsReferenceLinks;
-}
-
-export interface AzureDevOpsPullRequestSummary {
-  pullRequestId?: number;
-  title?: string;
-  description?: string;
-  status?: string;
-  sourceRefName?: string;
-  targetRefName?: string;
-  creationDate?: string;
-  mergeStatus?: string;
-  repository?: AzureDevOpsRepositoryRef;
-  createdBy?: AzureDevOpsIdentityRef;
-  url?: string;
-}
-
-export interface AzureDevOpsPullRequestDetail extends AzureDevOpsPullRequestSummary {
-  reviewers?: AzureDevOpsIdentityRef[];
-  completionOptions?: Record<string, unknown>;
-  mergeOptions?: Record<string, unknown>;
-  lastMergeSourceCommit?: Record<string, unknown>;
-  lastMergeTargetCommit?: Record<string, unknown>;
-  lastMergeCommit?: Record<string, unknown>;
-}
-
-export interface AzureDevOpsComment {
-  id?: number;
-  parentCommentId?: number;
-  author?: AzureDevOpsIdentityRef;
-  content?: string;
-  commentType?: number;
-  isDeleted?: boolean;
-  publishedDate?: string;
-  lastUpdatedDate?: string;
-  url?: string;
-  _links?: AzureDevOpsReferenceLinks;
-}
-
-export interface AzureDevOpsCommentThread {
-  id?: number;
-  status?: string;
-  threadContext?: Record<string, unknown>;
-  comments?: AzureDevOpsComment[];
-  properties?: Record<string, unknown>;
-  url?: string;
-  _links?: AzureDevOpsReferenceLinks;
-}
-
-export interface AzureDevOpsWorkItemRelation {
-  rel?: string;
-  url?: string;
-  attributes?: Record<string, unknown>;
-}
-
-export interface AzureDevOpsWorkItemCommentVersionRef {
-  commentId?: number;
-  createdInRevision?: number;
-  isDeleted?: boolean;
-  text?: string;
-  url?: string;
-  version?: number;
-}
-
-export interface AzureDevOpsWorkItem {
-  id?: number;
-  rev?: number;
-  fields?: Record<string, unknown>;
-  relations?: AzureDevOpsWorkItemRelation[];
-  _links?: AzureDevOpsReferenceLinks;
-  url?: string;
-  commentVersionRef?: AzureDevOpsWorkItemCommentVersionRef;
-}
-
-export interface AzureDevOpsWiqlResult {
-  queryType?: string;
-  queryResultType?: number;
-  asOf?: string;
-  columns?: Array<{
-    referenceName?: string;
-    name?: string;
-    url?: string;
-  }>;
-  workItems?: Array<{
-    id?: number;
-    url?: string;
-  }>;
-  workItemRelations?: Array<{
-    rel?: string;
-    source?: { id?: number; url?: string };
-    target?: { id?: number; url?: string };
-  }>;
-  queryResultUrl?: string;
-}
+/**
+ * Work item comment creation schema.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
+ * - WorkItemComment
+ */
+export const addWorkItemCommentOutputSchema = workItemCommentSchema;
 
 export function ensureArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value : [];
@@ -1019,121 +591,24 @@ export function ensureRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-/**
- * Pull request update schema.
- */
-export const updatePullRequestOutputSchemaByVersion = {
-  "5.1": z.object({
-    pullRequestId: z.number().nullable(),
-    title: z.string().nullable(),
-    status: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    pullRequestId: z.number().nullable(),
-    title: z.string().nullable(),
-    status: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    pullRequestId: z.number().nullable(),
-    title: z.string().nullable(),
-    status: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.1": z.object({
-    pullRequestId: z.number().nullable(),
-    title: z.string().nullable(),
-    status: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-} as const;
+export function normalizeAzureDevOpsDates<T>(value: T): T {
+  if (value instanceof Date) {
+    return value.toISOString() as unknown as T;
+  }
 
-/**
- * Pull request thread update schema.
- */
-export const updatePullRequestThreadOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.number().nullable(),
-    status: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    id: z.number().nullable(),
-    status: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    id: z.number().nullable(),
-    status: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.1": z.object({
-    id: z.number().nullable(),
-    status: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-} as const;
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeAzureDevOpsDates(item)) as unknown as T;
+  }
 
-/**
- * Work items batch schema.
- */
-const batchWorkItemSchema = z.object({
-  id: z.number().nullable(),
-  rev: z.number().nullable(),
-  fields: z.record(z.string(), z.unknown()),
-  url: z.string().nullable(),
-});
+  if (typeof value === "object" && value !== null) {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
+      normalized[key] = normalizeAzureDevOpsDates(item);
+    }
+    return normalized as unknown as T;
+  }
 
-export const batchWorkItemsOutputSchemaByVersion = {
-  "5.1": z.object({ workItems: z.array(batchWorkItemSchema) }),
-  "6.0": z.object({ workItems: z.array(batchWorkItemSchema) }),
-  "7.0": z.object({ workItems: z.array(batchWorkItemSchema) }),
-  "7.1": z.object({ workItems: z.array(batchWorkItemSchema) }),
-} as const;
-
-/**
- * Work item types list schema.
- */
-const workItemTypeSchema = z.object({
-  name: z.string().nullable(),
-  description: z.string().nullable(),
-  url: z.string().nullable(),
-});
-
-export const workItemTypesOutputSchemaByVersion = {
-  "5.1": z.object({ workItemTypes: z.array(workItemTypeSchema) }),
-  "6.0": z.object({ workItemTypes: z.array(workItemTypeSchema) }),
-  "7.0": z.object({ workItemTypes: z.array(workItemTypeSchema) }),
-  "7.1": z.object({ workItemTypes: z.array(workItemTypeSchema) }),
-} as const;
-
-/**
- * Work item comment creation schema.
- */
-export const addWorkItemCommentOutputSchemaByVersion = {
-  "5.1": z.object({
-    id: z.number().nullable(),
-    text: z.string().nullable(),
-    createdDate: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "6.0": z.object({
-    id: z.number().nullable(),
-    text: z.string().nullable(),
-    createdDate: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.0": z.object({
-    id: z.number().nullable(),
-    text: z.string().nullable(),
-    createdDate: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-  "7.1": z.object({
-    id: z.number().nullable(),
-    text: z.string().nullable(),
-    createdDate: z.string().nullable(),
-    url: z.string().nullable(),
-  }),
-} as const;
+  return value;
+}

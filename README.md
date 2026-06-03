@@ -28,7 +28,7 @@ bun run src/scripts/gen-config.ts
 npx . gen-config
 ```
 
-如果直接執行 `npx .`，會顯示 help。 
+如果直接執行 `npx .`，會顯示 help。
 
 4. 若使用 Node 版本執行，先編譯
 
@@ -42,8 +42,6 @@ bun run build
   - Azure DevOps Server 的完整 URL，包含 collection 路徑，例如 `http://my-local-server:8080/tfs/DefaultCollection`
 - `AZURE_DEVOPS_TOKEN`
   - Personal Access Token，用於 Basic Auth
-- `AZURE_DEVOPS_API_VERSION`
-  - API 版本，預設 `7.1`
 - `NODE_TLS_REJECT_UNAUTHORIZED`
   - 若使用自簽章 HTTPS，設定 `0` 以允許繞過驗證
 
@@ -55,10 +53,10 @@ bun run build
 
 - `AZURE_DEVOPS_URL` → `${input:azureDevOpsUrl}`
 - `AZURE_DEVOPS_TOKEN` → `${input:azureDevOpsToken}`
-- `AZURE_DEVOPS_API_VERSION` → `${input:azureDevOpsApiVersion}`
 - `NODE_TLS_REJECT_UNAUTHORIZED` → `${input:nodeTlsRejectUnauthorized}`
 
 生成的 `.vscode/mcp.json` 會以 `node ./dist/index.js` 執行 MCP Server。請先執行 `bun run build` 產生 `dist/index.js`，該 build 檔案會提交到版本庫。
+
 ```
 
 ## VS Code 偵錯設定
@@ -72,3 +70,4 @@ bun run build
   - 針對 Node 目標建置 `src/index.ts` 到 `./dist`
 - `bun run gen-config`
   - 生成或更新工作區 `.vscode/mcp.json`
+```

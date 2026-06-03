@@ -6,15 +6,15 @@ import { registerPullRequestTools } from "./tools/pullRequests.js";
 import { registerWorkItemTools } from "./tools/workItems.js";
 
 async function main(): Promise<void> {
-  const client = getAzureDevOpsClient();
+  const client = await getAzureDevOpsClient();
   const mcpServer = new McpServer({
     name: "azure-devops-server-mcp",
     version: "1.0.0",
   });
 
-  registerWorkItemTools(mcpServer, client);
-  registerPullRequestTools(mcpServer, client);
-  registerProjectTools(mcpServer, client);
+  registerWorkItemTools(mcpServer, client.wit);
+  registerPullRequestTools(mcpServer, client.git);
+  registerProjectTools(mcpServer, client.core);
 
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);

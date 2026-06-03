@@ -1,23 +1,20 @@
-import type { AxiosInstance } from "axios";
+import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
+import type * as WorkItemTrackingInterfaces from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
+import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
+import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
-import { apiVersion } from "../client.js";
-import type {
-  AzureDevOpsWorkItem,
-  AzureDevOpsWorkItemRelation,
-  AzureDevOpsWiqlResult,
-  SupportedApiVersion,
-} from "../types/azureDevOps.js";
 import {
   ensureArray,
   ensureRecord,
-  createWorkItemOutputSchemaByVersion,
-  queryWorkItemsOutputSchemaByVersion,
-  updateWorkItemOutputSchemaByVersion,
-  workItemOutputSchemaByVersion,
-  batchWorkItemsOutputSchemaByVersion,
-  workItemTypesOutputSchemaByVersion,
-  addWorkItemCommentOutputSchemaByVersion,
+  normalizeAzureDevOpsDates,
+  createWorkItemOutputSchema,
+  queryWorkItemsOutputSchema,
+  updateWorkItemOutputSchema,
+  workItemOutputSchema,
+  batchWorkItemsOutputSchema,
+  workItemTypesOutputSchema,
+  addWorkItemCommentOutputSchema,
 } from "../types/azureDevOps.js";
 
 const workItemIdSchema = z.union([
@@ -27,7 +24,7 @@ const workItemIdSchema = z.union([
 
 export function registerWorkItemTools(
   server: McpServer,
-  client: AxiosInstance,
+  witApi: IWorkItemTrackingApi,
 ): void {
   server.registerTool(
     "get_work_item",
@@ -36,31 +33,31 @@ export function registerWorkItemTools(
       inputSchema: {
         id: workItemIdSchema.describe("工作項目編號"),
       },
-      outputSchema:
-        workItemOutputSchemaByVersion[apiVersion as SupportedApiVersion],
+      outputSchema: workItemOutputSchema,
     },
     async ({ id }: { id: number }) => {
-      const response = await client.get(`wit/workitems/${id}`);
-      const rawFields = response.data?.fields;
+      const response = await witApi.getWorkItem(id);
+      const rawFields = response?.fields;
       const fields = ensureRecord(rawFields);
       const assignedToRaw = fields["System.AssignedTo"];
-      const relations = ensureArray<AzureDevOpsWorkItemRelation>(
-        response.data?.relations,
-      );
+      const relations =
+        ensureArray<WorkItemTrackingInterfaces.WorkItemRelation>(
+          response?.relations,
+        );
       return {
         content: [],
-        structuredContent: {
-          id: response.data?.id,
-          rev: response.data?.rev,
-          title: fields["System.Title"] ?? null,
-          state: fields["System.State"] ?? null,
+        structuredContent: normalizeAzureDevOpsDates({
+          id: response?.id,
+          rev: response?.rev,
+          title: fields["System.Title"] ?? undefined,
+          state: fields["System.State"] ?? undefined,
           assignedTo: cleanAssignedTo(assignedToRaw),
           fields,
           relations,
-          _links: response.data?._links ?? null,
-          commentVersionRef: response.data?.commentVersionRef ?? null,
-          url: response.data?.url ?? null,
-        },
+          _links: response?._links ?? undefined,
+          commentVersionRef: response?.commentVersionRef ?? undefined,
+          url: response?.url ?? undefined,
+        }),
       };
     },
   );
@@ -75,17 +72,13 @@ export function registerWorkItemTools(
         fields: z
           .record(z.string(), z.unknown())
           .describe("欄位名稱與對應值的物件"),
-        bypassRules: z
-          .boolean()
-          .optional()
-          .describe("略過工作項目規則驗證"),
+        bypassRules: z.boolean().optional().describe("略過工作項目規則驗證"),
         suppressNotifications: z
           .boolean()
           .optional()
           .describe("建立後不發送通知"),
       },
-      outputSchema:
-        createWorkItemOutputSchemaByVersion[apiVersion as SupportedApiVersion],
+      outputSchema: createWorkItemOutputSchema,
     },
     async ({
       project,
@@ -100,33 +93,32 @@ export function registerWorkItemTools(
       bypassRules?: boolean;
       suppressNotifications?: boolean;
     }) => {
-      const operations = Object.entries(fields).map(([fieldKey, value]) => ({
-        op: "add",
+      const operations: VSSInterfaces.JsonPatchOperation[] = Object.entries(
+        fields,
+      ).map(([fieldKey, value]) => ({
+        op: VSSInterfaces.Operation.Add,
         path: fieldKey.startsWith("/fields/")
           ? fieldKey
           : `/fields/${fieldKey}`,
         value,
       }));
-      const queryParams: Record<string, unknown> = { project };
-      if (bypassRules !== undefined) queryParams["bypassRules"] = bypassRules;
-      if (suppressNotifications !== undefined)
-        queryParams["suppressNotifications"] = suppressNotifications;
-      const response = await client.post(
-        `wit/workitems/$${encodeURIComponent(type)}`,
+      const response = await witApi.createWorkItem(
+        undefined,
         operations,
-        {
-          headers: { "Content-Type": "application/json-patch+json" },
-          params: queryParams,
-        },
+        project,
+        type,
+        undefined,
+        bypassRules,
+        suppressNotifications,
       );
       return {
         content: [],
-        structuredContent: {
-          id: response.data?.id,
-          rev: response.data?.rev,
-          url: response.data?.url ?? null,
-          fields: response.data?.fields ?? {},
-        },
+        structuredContent: normalizeAzureDevOpsDates({
+          id: response?.id,
+          rev: response?.rev,
+          url: response?.url ?? undefined,
+          fields: response?.fields ?? {},
+        }),
       };
     },
   );
@@ -163,8 +155,7 @@ export function registerWorkItemTools(
           .optional()
           .describe("更新後不發送通知"),
       },
-      outputSchema:
-        updateWorkItemOutputSchemaByVersion[apiVersion as SupportedApiVersion],
+      outputSchema: updateWorkItemOutputSchema,
     },
     async ({
       id,
@@ -185,10 +176,10 @@ export function registerWorkItemTools(
       bypassRules?: boolean;
       suppressNotifications?: boolean;
     }) => {
-      const operations = [] as Array<Record<string, unknown>>;
+      const operations: VSSInterfaces.JsonPatchOperation[] = [];
       if (state) {
         operations.push({
-          op: "replace",
+          op: VSSInterfaces.Operation.Replace,
           path: "/fields/System.State",
           value: state,
         });
@@ -196,7 +187,7 @@ export function registerWorkItemTools(
       if (fields) {
         for (const [fieldKey, value] of Object.entries(fields)) {
           operations.push({
-            op: "replace",
+            op: VSSInterfaces.Operation.Replace,
             path: fieldKey.startsWith("/fields/")
               ? fieldKey
               : `/fields/${fieldKey}`,
@@ -207,7 +198,7 @@ export function registerWorkItemTools(
       if (addRelations) {
         for (const relation of addRelations) {
           operations.push({
-            op: "add",
+            op: VSSInterfaces.Operation.Add,
             path: "/relations/-",
             value: {
               rel: relation.rel,
@@ -222,28 +213,24 @@ export function registerWorkItemTools(
           "至少需要提供 state、fields 或 addRelations 其中一個屬性進行更新。",
         );
       }
-      const queryParams: Record<string, unknown> = {};
-      if (bypassRules !== undefined) queryParams["bypassRules"] = bypassRules;
-      if (suppressNotifications !== undefined)
-        queryParams["suppressNotifications"] = suppressNotifications;
-      const response = await client.patch(
-        `wit/workitems/${id}`,
+      const response = await witApi.updateWorkItem(
+        undefined,
         operations,
-        {
-          headers: { "Content-Type": "application/json-patch+json" },
-          params:
-            Object.keys(queryParams).length > 0 ? queryParams : undefined,
-        },
+        id,
+        undefined,
+        undefined,
+        bypassRules,
+        suppressNotifications,
       );
       return {
         content: [],
-        structuredContent: {
-          id: response.data?.id,
-          rev: response.data?.rev,
-          state: response.data?.fields?.["System.State"],
-          fields: response.data?.fields ?? {},
-          url: response.data?.url ?? null,
-        },
+        structuredContent: normalizeAzureDevOpsDates({
+          id: response?.id,
+          rev: response?.rev,
+          state: response?.fields?.["System.State"],
+          fields: response?.fields ?? {},
+          url: response?.url ?? undefined,
+        }),
       };
     },
   );
@@ -265,8 +252,7 @@ export function registerWorkItemTools(
           .optional()
           .describe("最多回傳幾筆結果"),
       },
-      outputSchema:
-        queryWorkItemsOutputSchemaByVersion[apiVersion as SupportedApiVersion],
+      outputSchema: queryWorkItemsOutputSchema,
     },
     async ({
       project,
@@ -277,18 +263,23 @@ export function registerWorkItemTools(
       wiql: string;
       top?: number;
     }) => {
-      const params: Record<string, unknown> = {};
-      if (project) params["project"] = project;
-      if (top !== undefined) params["$top"] = top;
-      const response = await client.post(
-        "wit/wiql",
+      const teamContext: CoreInterfaces.TeamContext | undefined = project
+        ? { project }
+        : undefined;
+      const wiqlResult = await witApi.queryByWiql(
         { query: wiql },
-        { params: Object.keys(params).length > 0 ? params : undefined },
+        teamContext,
+        undefined,
+        top,
       );
-      const wiqlResult = response.data as AzureDevOpsWiqlResult;
       const workItems = ensureArray<{ id?: number; url?: string }>(
         wiqlResult.workItems,
       );
+      const columns = ensureArray<{
+        referenceName?: string;
+        name?: string;
+        url?: string;
+      }>(wiqlResult.columns);
       const workItemRelations = ensureArray<{
         rel?: string;
         source?: { id?: number; url?: string };
@@ -296,23 +287,38 @@ export function registerWorkItemTools(
       }>(wiqlResult.workItemRelations);
       return {
         content: [],
-        structuredContent: {
+        structuredContent: normalizeAzureDevOpsDates({
+          asOf: wiqlResult.asOf ?? undefined,
+          columns: columns.map((column) => ({
+            referenceName: column.referenceName ?? undefined,
+            name: column.name ?? undefined,
+            url: column.url ?? undefined,
+          })),
           query: wiql,
-          queryResultUrl: wiqlResult.queryResultUrl ?? null,
+          queryResultType: wiqlResult.queryResultType ?? undefined,
+          queryType: wiqlResult.queryType ?? undefined,
+          queryResultUrl: undefined,
+          sortColumns: wiqlResult.sortColumns ?? undefined,
           workItems: workItems.map((item) => ({
-            id: item.id ?? null,
-            url: item.url ?? null,
+            id: item.id ?? undefined,
+            url: item.url ?? undefined,
           })),
           workItemRelations: workItemRelations.map((rel) => ({
-            rel: rel.rel ?? null,
+            rel: rel.rel ?? undefined,
             source: rel.source
-              ? { id: rel.source.id ?? null, url: rel.source.url ?? null }
-              : null,
+              ? {
+                  id: rel.source.id ?? undefined,
+                  url: rel.source.url ?? undefined,
+                }
+              : undefined,
             target: rel.target
-              ? { id: rel.target.id ?? null, url: rel.target.url ?? null }
-              : null,
+              ? {
+                  id: rel.target.id ?? undefined,
+                  url: rel.target.url ?? undefined,
+                }
+              : undefined,
           })),
-        },
+        }),
       };
     },
   );
@@ -331,8 +337,7 @@ export function registerWorkItemTools(
           .describe("要回傳的欄位清單，留空則回傳所有欄位"),
         project: z.string().optional().describe("專案名稱或 ID"),
       },
-      outputSchema:
-        batchWorkItemsOutputSchemaByVersion[apiVersion as SupportedApiVersion],
+      outputSchema: batchWorkItemsOutputSchema,
     },
     async ({
       ids,
@@ -343,27 +348,24 @@ export function registerWorkItemTools(
       fields?: string[];
       project?: string;
     }) => {
-      const body: Record<string, unknown> = { ids };
-      if (fields && fields.length > 0) body["fields"] = fields;
-      const response = await client.post("wit/workitemsbatch", body, {
-        params: project ? { project } : undefined,
-      });
-      const workItems = ensureArray<{
-        id?: number;
-        rev?: number;
-        fields?: Record<string, unknown>;
-        url?: string;
-      }>(response.data?.value);
+      const workItems = await witApi.getWorkItems(
+        ids,
+        fields,
+        undefined,
+        undefined,
+        undefined,
+        project,
+      );
       return {
         content: [],
-        structuredContent: {
-          workItems: workItems.map((item) => ({
-            id: item.id ?? null,
-            rev: item.rev ?? null,
+        structuredContent: normalizeAzureDevOpsDates({
+          workItems: ensureArray(workItems).map((item: any) => ({
+            id: item.id ?? undefined,
+            rev: item.rev ?? undefined,
             fields: item.fields ?? {},
-            url: item.url ?? null,
+            url: item.url ?? undefined,
           })),
-        },
+        }),
       };
     },
   );
@@ -375,27 +377,19 @@ export function registerWorkItemTools(
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
       },
-      outputSchema:
-        workItemTypesOutputSchemaByVersion[apiVersion as SupportedApiVersion],
+      outputSchema: workItemTypesOutputSchema,
     },
     async ({ project }: { project: string }) => {
-      const response = await client.get("wit/workitemtypes", {
-        params: { project },
-      });
-      const types = ensureArray<{
-        name?: string;
-        description?: string;
-        url?: string;
-      }>(response.data?.value);
+      const types = await witApi.getWorkItemTypes(project);
       return {
         content: [],
-        structuredContent: {
-          workItemTypes: types.map((t) => ({
-            name: t.name ?? null,
-            description: t.description ?? null,
-            url: t.url ?? null,
+        structuredContent: normalizeAzureDevOpsDates({
+          workItemTypes: ensureArray(types).map((t: any) => ({
+            name: t.name ?? undefined,
+            description: t.description ?? undefined,
+            url: t.url ?? undefined,
           })),
-        },
+        }),
       };
     },
   );
@@ -407,12 +401,9 @@ export function registerWorkItemTools(
       inputSchema: {
         id: workItemIdSchema.describe("工作項目編號"),
         text: z.string().min(1).describe("評論內容（支援 Markdown）"),
-        project: z.string().optional().describe("專案名稱或 ID"),
+        project: z.string().describe("專案名稱或 ID"),
       },
-      outputSchema:
-        addWorkItemCommentOutputSchemaByVersion[
-          apiVersion as SupportedApiVersion
-        ],
+      outputSchema: addWorkItemCommentOutputSchema,
     },
     async ({
       id,
@@ -421,21 +412,20 @@ export function registerWorkItemTools(
     }: {
       id: number;
       text: string;
-      project?: string;
+      project: string;
     }) => {
-      const response = await client.post(
-        `wit/workitems/${id}/comments`,
-        { text },
-        { params: project ? { project } : undefined },
-      );
+      const commentCreate: WorkItemTrackingInterfaces.CommentCreate = {
+        text,
+      };
+      const comment = await witApi.addComment(commentCreate, project, id);
       return {
         content: [],
-        structuredContent: {
-          id: response.data?.id ?? null,
-          text: response.data?.text ?? null,
-          createdDate: response.data?.createdDate ?? null,
-          url: response.data?.url ?? null,
-        },
+        structuredContent: normalizeAzureDevOpsDates({
+          id: comment?.id ?? undefined,
+          text: comment?.text ?? undefined,
+          createdDate: comment?.createdDate ?? undefined,
+          url: comment?.url ?? undefined,
+        }),
       };
     },
   );

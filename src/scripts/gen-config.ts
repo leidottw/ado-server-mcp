@@ -54,7 +54,6 @@ function main(): void {
   validateArgs(args);
 
   const targetPath = getTargetPath();
-  const apiVersion = "7.0";
   const command = "node";
   const distEntry = path.join(packageRoot, "dist", "index.js");
   const runnerArgs = [distEntry];
@@ -124,12 +123,6 @@ function main(): void {
       default: "",
     },
     {
-      id: "azureDevOpsApiVersion",
-      type: "promptString",
-      description: "Azure DevOps API 版本（支援 5.1/6.0/7.0/7.1）",
-      default: apiVersion,
-    },
-    {
       id: "nodeTlsRejectUnauthorized",
       type: "promptString",
       description: "若使用自簽章 HTTPS，輸入 0；留空則使用預設憑證驗證。",
@@ -162,7 +155,6 @@ function main(): void {
         env: {
           AZURE_DEVOPS_URL: "${input:azureDevOpsUrl}",
           AZURE_DEVOPS_TOKEN: "${input:azureDevOpsToken}",
-          AZURE_DEVOPS_API_VERSION: "${input:azureDevOpsApiVersion}",
           NODE_TLS_REJECT_UNAUTHORIZED: "${input:nodeTlsRejectUnauthorized}",
         },
       },
