@@ -1,0 +1,28 @@
+{
+  "inputs": [
+    {
+      "id": "azureDevOpsUrl",
+      "type": "promptString",
+      "description": "Azure DevOps Server URL，例如 https://my-server/DefaultCollection",
+      "default": ""
+    },
+    {
+      "id": "azureDevOpsToken",
+      "type": "promptString",
+      "description": "Azure DevOps Personal Access Token",
+      "default": ""
+    }
+  ],
+  "servers": {
+    "azure-devops-server-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@cb/ado-server-mcp"],
+      "env": {
+        "AZURE_DEVOPS_URL": "${input:azureDevOpsUrl}",
+        "AZURE_DEVOPS_TOKEN": "${input:azureDevOpsToken}",
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
+    }
+  }
+}
