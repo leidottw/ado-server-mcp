@@ -1,19 +1,21 @@
 {
-  "name": "ado-server-mcp-6",
+  "name": "@cb/ado-server-mcp",
+  "description": "MCP Server for Azure DevOps Server (On-Premise) supporting work item management, pull requests, and project operations",
+  "version": "0.1.0",
   "type": "module",
-  "private": true,
   "bin": {
-    "gen-config": "dist/bin/gen-config.js"
+    "ado-server-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "bun build ./src/index.ts ./src/scripts/gen-config.ts ./src/bin/gen-config.ts --outdir ./dist --target node",
-    "gen-config": "bun run src/scripts/gen-config.ts"
+    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "start": "dotenv -- bun run ./src/index.ts"
   },
   "devDependencies": {
-    "prettier": "^3.8.3",
-    "typescript": "^5.9.3",
     "@types/bun": "^1.3.14",
-    "@types/node": "^25.9.1"
+    "@types/node": "^25.9.1",
+    "dotenv-cli": "^11.0.0",
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -22,5 +24,10 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "azure-devops-node-api": "^15.1.2",
     "zod": "^4.4.3"
-  }
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ]
 }
