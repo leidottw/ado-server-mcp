@@ -39,9 +39,9 @@
 
 ## 快速開始
 
-在 VS Code 中配置 MCP Server，參考下方的 [VS Code MCP 設定](#vs-code-mcp-設定)部分。
+參考下方設定說明，將 MCP Server 加入你使用的 AI 工具。
 
-## VS Code MCP 設定
+## GitHub Copilot (VS Code) MCP 設定
 
 1. 在 VS Code 中開啟命令面板 (`Cmd/Ctrl + Shift + P`)
 2. 執行 `MCP: Open User Configuration`
@@ -76,6 +76,37 @@
     }
   }
 }
+```
+
+## Claude Code MCP 設定
+
+在 `~/.claude.json` 的根層加入 `mcpServers`，設定後對所有專案生效：
+
+```json
+{
+  "mcpServers": {
+    "azure-devops-server-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@cb/ado-server-mcp"],
+      "env": {
+        "AZURE_DEVOPS_URL": "https://my-server/DefaultCollection",
+        "AZURE_DEVOPS_TOKEN": "your-pat-token",
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
+    }
+  }
+}
+```
+
+或直接使用 CLI 新增（效果相同）：
+
+```bash
+claude mcp add --scope user azure-devops-server-mcp \
+  -e AZURE_DEVOPS_URL=https://my-server/DefaultCollection \
+  -e AZURE_DEVOPS_TOKEN=your-pat-token \
+  -e NODE_TLS_REJECT_UNAUTHORIZED=0 \
+  -- npx -y @cb/ado-server-mcp
 ```
 
 ## 開發
