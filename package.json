@@ -7,7 +7,7 @@
     "ado-server-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "build": "bun build.ts",
     "start": "dotenv -- bun run ./src/index.ts"
   },
   "devDependencies": {
