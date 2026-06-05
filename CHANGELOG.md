@@ -4,6 +4,17 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，版本號遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.2.1] - 2026-06-05
+
+### Added
+
+- 新增 `build.ts` 建置腳本，取代原本的 tsc 直接呼叫
+
+### Changed
+
+- 強化 production build 設定
+- 更新快速開始與設定說明
+
 ## [0.2.0] - 2026-06-05
 
 ### Added
