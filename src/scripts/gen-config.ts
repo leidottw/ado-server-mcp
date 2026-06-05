@@ -4,11 +4,6 @@ import { spawnSync } from "child_process";
 
 const projectRoot = path.resolve(process.cwd());
 
-function hasBun(): boolean {
-  const result = spawnSync("bun", ["--version"], { stdio: "ignore" });
-  return result.status === 0;
-}
-
 function writeConfig(configPath: string, content: unknown): void {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, `${JSON.stringify(content, null, 2)}\n`, "utf8");
@@ -45,18 +40,13 @@ function main(): void {
 
   const targetPath = getTargetPath();
   const apiVersion = "7.1";
-  const bunAvailable = hasBun();
-  const command = bunAvailable ? "bun" : "node";
-  const runnerArgs = bunAvailable
-    ? ["run", path.join(projectRoot, "src/index.ts")]
-    : [path.join(projectRoot, "dist/index.js")];
+  const command = "node";
+  const distEntry = path.join(projectRoot, "dist", "index.js");
+  const runnerArgs = [distEntry];
 
-  if (
-    !bunAvailable &&
-    !fs.existsSync(path.join(projectRoot, "dist/index.js"))
-  ) {
+  if (!fs.existsSync(distEntry)) {
     console.error(
-      "bun 未安裝，且 dist/index.js 不存在。請先執行 npm run build 或 bun build ./src/index.ts --outdir ./dist --target node。",
+      "dist/index.js 不存在，請先執行 bun run build 以產生 build 檔案。",
     );
     process.exit(1);
   }

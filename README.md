@@ -50,22 +50,7 @@ bun run build
 - `AZURE_DEVOPS_API_VERSION` → `${input:azureDevOpsApiVersion}`
 - `NODE_TLS_REJECT_UNAUTHORIZED` → `${input:nodeTlsRejectUnauthorized}`
 
-若系統可用 Bun，會使用：
-
-```json
-{
-  "command": "bun",
-  "args": ["run", "/absolute/path/to/project/src/index.ts"]
-}
-```
-
-否則會改為：
-
-```json
-{
-  "command": "node",
-  "args": ["/absolute/path/to/project/dist/index.js"]
-}
+生成的 `.vscode/mcp.json` 會以 `node ./dist/index.js` 執行 MCP Server。請先執行 `bun run build` 產生 `dist/index.js`，該 build 檔案會提交到版本庫。
 ```
 
 ## VS Code 偵錯設定
