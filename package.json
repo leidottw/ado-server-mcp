@@ -3,8 +3,11 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "gen-config": "dist/bin/gen-config.js"
+  },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "build": "bun build ./src/index.ts ./src/scripts/gen-config.ts ./src/bin/gen-config.ts --outdir ./dist --target node",
     "gen-config": "bun run src/scripts/gen-config.ts"
   },
   "devDependencies": {

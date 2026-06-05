@@ -19,8 +19,16 @@ cp .env.example .env
 3. 產生 VS Code 工作區 MCP 設定
 
 ```bash
-bun run src/scripts/gen-config.ts --workspace
+bun run src/scripts/gen-config.ts
 ```
+
+或在執行目錄使用 npx：
+
+```bash
+npx . gen-config
+```
+
+如果直接執行 `npx .`，會顯示 help。 
 
 4. 若使用 Node 版本執行，先編譯
 

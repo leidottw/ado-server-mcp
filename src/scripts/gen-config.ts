@@ -1,8 +1,11 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
 
-const projectRoot = path.resolve(process.cwd());
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const packageRoot = path.resolve(__dirname, "..", "..");
+const executionRoot = process.cwd();
 
 function writeConfig(configPath: string, content: unknown): void {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -10,17 +13,13 @@ function writeConfig(configPath: string, content: unknown): void {
 }
 
 function showUsage(): void {
-  console.error(
-    "用法: bun run src/scripts/gen-config.ts [--workspace] [--help]",
-  );
-  console.error("  --workspace  建立或更新工作區層級的 .vscode/mcp.json");
+  console.error("用法: bun run src/scripts/gen-config.ts [--help]");
+  console.error("       npx . gen-config [--help]");
   process.exit(0);
 }
 
 function validateArgs(args: string[]): void {
-  const invalid = args.filter(
-    (arg) => arg !== "--workspace" && arg !== "--help",
-  );
+  const invalid = args.filter((arg) => arg !== "--help");
   if (invalid.length > 0) {
     console.error(`不支援的參數: ${invalid.join(", ")}`);
     showUsage();
@@ -28,11 +27,27 @@ function validateArgs(args: string[]): void {
 }
 
 function getTargetPath(): string {
-  return path.join(projectRoot, ".vscode", "mcp.json");
+  return path.join(executionRoot, ".vscode", "mcp.json");
 }
 
 function main(): void {
-  const args = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
+  const isPackageBinary = fileURLToPath(import.meta.url).endsWith(
+    path.join("dist", "scripts", "gen-config.js"),
+  );
+
+  let args = rawArgs;
+  if (isPackageBinary) {
+    if (args.length === 0) {
+      showUsage();
+    }
+    if (args[0] !== "gen-config") {
+      console.error(`不支援的指令：${args[0]}`);
+      showUsage();
+    }
+    args = args.slice(1);
+  }
+
   if (args.includes("--help")) {
     showUsage();
   }
@@ -41,7 +56,7 @@ function main(): void {
   const targetPath = getTargetPath();
   const apiVersion = "7.1";
   const command = "node";
-  const distEntry = path.join(projectRoot, "dist", "index.js");
+  const distEntry = path.join(packageRoot, "dist", "index.js");
   const runnerArgs = [distEntry];
 
   if (!fs.existsSync(distEntry)) {
