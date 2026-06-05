@@ -6,12 +6,13 @@ import { getAzureDevOpsClient } from "./client.js";
 import { registerProjectTools } from "./tools/projects.js";
 import { registerPullRequestTools } from "./tools/pullRequests.js";
 import { registerWorkItemTools } from "./tools/workItems.js";
+import { version } from "../package.json";
 
 async function main(): Promise<void> {
   const client = await getAzureDevOpsClient();
   const mcpServer = new McpServer({
     name: "azure-devops-server-mcp",
-    version: "1.0.0",
+    version,
   });
 
   registerWorkItemTools(mcpServer, client.wit);
