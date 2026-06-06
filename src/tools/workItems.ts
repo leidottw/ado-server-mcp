@@ -1,6 +1,9 @@
 import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
 import type * as WorkItemTrackingInterfaces from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
-import { WorkItemExpand } from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
+import {
+  WorkItemExpand,
+  CommentSortOrder,
+} from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
 import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -10,6 +13,7 @@ import {
   ensureRecord,
   normalizeAzureDevOpsDates,
   createWorkItemOutputSchema,
+  getWorkItemCommentsOutputSchema,
   queryWorkItemsOutputSchema,
   updateWorkItemOutputSchema,
   workItemOutputSchema,
@@ -453,6 +457,73 @@ export function registerWorkItemTools(
             name: t.name ?? undefined,
             description: t.description ?? undefined,
             url: t.url ?? undefined,
+          })),
+        }),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_work_item_comments",
+    {
+      description: "取得工作項目的評論清單",
+      inputSchema: {
+        id: workItemIdSchema.describe("工作項目編號"),
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        top: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("最多回傳筆數"),
+        order: z
+          .enum(["asc", "desc"])
+          .optional()
+          .describe("排序方向：asc（舊至新）或 desc（新至舊），預設 asc"),
+      },
+      outputSchema: getWorkItemCommentsOutputSchema,
+    },
+    async ({
+      id,
+      project,
+      top,
+      order,
+    }: {
+      id: number;
+      project: string;
+      top?: number;
+      order?: "asc" | "desc";
+    }) => {
+      const orderMap = {
+        asc: CommentSortOrder.Asc,
+        desc: CommentSortOrder.Desc,
+      };
+      const result = await witApi.getComments(
+        project,
+        id,
+        top,
+        undefined,
+        undefined,
+        undefined,
+        order ? orderMap[order] : undefined,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          totalCount: result?.totalCount ?? undefined,
+          count: result?.count ?? undefined,
+          continuationToken: result?.continuationToken ?? undefined,
+          comments: ensureArray<WorkItemTrackingInterfaces.Comment>(
+            result?.comments,
+          ).map((c) => ({
+            id: c.id ?? undefined,
+            text: c.text ?? undefined,
+            createdBy: c.createdBy ?? undefined,
+            createdDate: c.createdDate ?? undefined,
+            modifiedBy: c.modifiedBy ?? undefined,
+            modifiedDate: c.modifiedDate ?? undefined,
+            isDeleted: c.isDeleted ?? undefined,
+            url: c.url ?? undefined,
           })),
         }),
       };

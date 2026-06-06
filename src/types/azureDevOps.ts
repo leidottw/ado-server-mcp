@@ -572,6 +572,29 @@ export const workItemTypesOutputSchema = z
  */
 export const addWorkItemCommentOutputSchema = workItemCommentSchema;
 
+const witCommentSchema = z
+  .object({
+    id: z.number(),
+    text: z.string(),
+    createdBy: identityRefSchema.optional(),
+    createdDate: z.string(),
+    modifiedBy: identityRefSchema.optional(),
+    modifiedDate: z.string(),
+    isDeleted: z.boolean(),
+    url: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+export const getWorkItemCommentsOutputSchema = z
+  .object({
+    totalCount: z.number().optional(),
+    count: z.number().optional(),
+    continuationToken: z.string().optional(),
+    comments: z.array(witCommentSchema),
+  })
+  .passthrough();
+
 // ─── Pipeline (Build) Schemas ─────────────────────────────────────────────────
 
 const buildDefinitionReferenceSchema = z
