@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   registerWorkItemTools(mcpServer, client.wit);
   registerPullRequestTools(mcpServer, client.git);
   registerProjectTools(mcpServer, client.core);
-  registerPipelineTools(mcpServer, client.build);
+  registerPipelineTools(mcpServer, client.build, client.git);
 
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);

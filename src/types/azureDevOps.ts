@@ -642,6 +642,52 @@ export const getBuildLogsOutputSchema = z
   })
   .passthrough();
 
+const buildRepositorySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    defaultBranch: z.string(),
+    url: z.string(),
+    rootFolder: z.string(),
+    clean: z.string(),
+    checkoutSubmodules: z.boolean(),
+  })
+  .partial()
+  .passthrough();
+
+const buildDefinitionVariableSchema = z
+  .object({
+    allowOverride: z.boolean(),
+    isSecret: z.boolean(),
+    value: z.string().nullable(),
+  })
+  .partial()
+  .passthrough();
+
+export const getPipelineDefinitionOutputSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    path: z.string(),
+    url: z.string(),
+    revision: z.number(),
+    createdDate: z.string(),
+    description: z.string(),
+    buildNumberFormat: z.string(),
+    jobTimeoutInMinutes: z.number(),
+    tags: z.array(z.string()),
+    repository: buildRepositorySchema.optional(),
+    variables: z.record(z.string(), buildDefinitionVariableSchema).optional(),
+    authoredBy: identityRefSchema.optional(),
+  })
+  .partial()
+  .passthrough();
+
+export const getPipelineDefinitionYamlOutputSchema = z
+  .object({ yaml: z.string().optional() })
+  .passthrough();
+
 // ─── PR Review Schemas ─────────────────────────────────────────────────────────
 
 export const updatePrReviewerOutputSchema = identityRefWithVoteSchema;

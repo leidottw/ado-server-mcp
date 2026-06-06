@@ -1,4 +1,5 @@
 import type { IBuildApi } from "azure-devops-node-api/BuildApi";
+import type { IGitApi } from "azure-devops-node-api/GitApi";
 import * as BuildInterfaces from "azure-devops-node-api/interfaces/BuildInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
@@ -6,6 +7,8 @@ import {
   ensureArray,
   normalizeAzureDevOpsDates,
   getBuildLogsOutputSchema,
+  getPipelineDefinitionOutputSchema,
+  getPipelineDefinitionYamlOutputSchema,
   listPipelinesOutputSchema,
   getPipelineRunOutputSchema,
   listPipelineRunsOutputSchema,
@@ -15,6 +18,7 @@ import {
 export function registerPipelineTools(
   server: McpServer,
   buildApi: IBuildApi,
+  gitApi: IGitApi,
 ): void {
   server.registerTool(
     "list_pipelines",
@@ -26,12 +30,7 @@ export function registerPipelineTools(
           .string()
           .optional()
           .describe("以名稱篩選，支援萬用字元（例如 *deploy*）"),
-        top: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe("最多回傳筆數"),
+        top: z.number().int().positive().optional().describe("最多回傳筆數"),
       },
       outputSchema: listPipelinesOutputSchema,
     },
@@ -77,11 +76,7 @@ export function registerPipelineTools(
       description: "列出 Pipeline 的執行歷程（Builds）",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
-        definitionId: z
-          .number()
-          .int()
-          .positive()
-          .describe("Pipeline 定義 ID"),
+        definitionId: z.number().int().positive().describe("Pipeline 定義 ID"),
         top: z
           .number()
           .int()
@@ -190,11 +185,7 @@ export function registerPipelineTools(
       description: "觸發 Pipeline 執行（Queue a Build）",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
-        definitionId: z
-          .number()
-          .int()
-          .positive()
-          .describe("Pipeline 定義 ID"),
+        definitionId: z.number().int().positive().describe("Pipeline 定義 ID"),
         sourceBranch: z
           .string()
           .optional()
@@ -226,6 +217,102 @@ export function registerPipelineTools(
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates(mapBuild(queued)),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_pipeline_definition",
+    {
+      description:
+        "取得單一 Pipeline 定義的詳細資訊，包含 repository、變數與觸發設定",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        definitionId: z.number().int().positive().describe("Pipeline 定義 ID"),
+      },
+      outputSchema: getPipelineDefinitionOutputSchema,
+    },
+    async ({
+      project,
+      definitionId,
+    }: {
+      project: string;
+      definitionId: number;
+    }) => {
+      const def = await buildApi.getDefinition(project, definitionId);
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          id: def?.id ?? undefined,
+          name: def?.name ?? undefined,
+          path: def?.path ?? undefined,
+          url: def?.url ?? undefined,
+          revision: def?.revision ?? undefined,
+          createdDate: def?.createdDate ?? undefined,
+          description: def?.description ?? undefined,
+          buildNumberFormat: def?.buildNumberFormat ?? undefined,
+          jobTimeoutInMinutes: def?.jobTimeoutInMinutes ?? undefined,
+          tags: def?.tags ?? undefined,
+          repository: def?.repository
+            ? {
+                id: def.repository.id ?? undefined,
+                name: def.repository.name ?? undefined,
+                type: def.repository.type ?? undefined,
+                defaultBranch: def.repository.defaultBranch ?? undefined,
+                url: def.repository.url ?? undefined,
+                rootFolder: def.repository.rootFolder ?? undefined,
+                clean: def.repository.clean ?? undefined,
+                checkoutSubmodules:
+                  def.repository.checkoutSubmodules ?? undefined,
+              }
+            : undefined,
+          variables: def?.variables ?? undefined,
+          authoredBy: def?.authoredBy ?? undefined,
+        }),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_pipeline_definition_yaml",
+    {
+      description: "取得 Pipeline 定義的完整 YAML 內容",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        definitionId: z.number().int().positive().describe("Pipeline 定義 ID"),
+      },
+      outputSchema: getPipelineDefinitionYamlOutputSchema,
+    },
+    async ({
+      project,
+      definitionId,
+    }: {
+      project: string;
+      definitionId: number;
+    }) => {
+      const def = await buildApi.getDefinition(project, definitionId);
+      const yamlFilename = (
+        def?.process as BuildInterfaces.YamlProcess | undefined
+      )?.yamlFilename;
+      const repositoryId = def?.repository?.id;
+      if (!yamlFilename || !repositoryId) {
+        return { content: [], structuredContent: { yaml: undefined } };
+      }
+      const item = await gitApi.getItem(
+        repositoryId,
+        yamlFilename,
+        project,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true,
+      );
+      return {
+        content: [],
+        structuredContent: { yaml: item?.content ?? undefined },
       };
     },
   );
