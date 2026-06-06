@@ -12,7 +12,6 @@ import {
   queryWorkItemsOutputSchema,
   updateWorkItemOutputSchema,
   workItemOutputSchema,
-  batchWorkItemsOutputSchema,
   workItemTypesOutputSchema,
   addWorkItemCommentOutputSchema,
 } from "../types/azureDevOps.js";
@@ -256,7 +255,14 @@ export function registerWorkItemTools(
           .string()
           .optional()
           .describe("專案名稱或 ID，若留空則使用預設 Collection"),
-        wiql: z.string().min(1).describe("WIQL 查詢字串"),
+        wiql: z
+          .string()
+          .min(1)
+          .describe(
+            "WIQL 查詢字串。範例：" +
+              "SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active' AND [System.TeamProject] = 'MyProject' ORDER BY [System.ChangedDate] DESC；" +
+              "若已知 ID 清單可用 IN 語法：SELECT [System.Id] FROM WorkItems WHERE [System.Id] IN (101, 102, 103)",
+          ),
         top: z
           .number()
           .int()
@@ -399,54 +405,6 @@ export function registerWorkItemTools(
       };
     },
   );
-  server.registerTool(
-    "get_work_items_batch",
-    {
-      description: "批次取得多個工作項目的詳細資料",
-      inputSchema: {
-        ids: z
-          .array(z.number().int().positive())
-          .min(1)
-          .describe("工作項目編號清單"),
-        fields: z
-          .array(z.string())
-          .optional()
-          .describe("要回傳的欄位清單，留空則回傳所有欄位"),
-        project: z.string().optional().describe("專案名稱或 ID"),
-      },
-      outputSchema: batchWorkItemsOutputSchema,
-    },
-    async ({
-      ids,
-      fields,
-      project,
-    }: {
-      ids: number[];
-      fields?: string[];
-      project?: string;
-    }) => {
-      const workItems = await witApi.getWorkItems(
-        ids,
-        fields,
-        undefined,
-        undefined,
-        undefined,
-        project,
-      );
-      return {
-        content: [],
-        structuredContent: normalizeAzureDevOpsDates({
-          workItems: ensureArray(workItems).map((item: any) => ({
-            id: item.id ?? undefined,
-            rev: item.rev ?? undefined,
-            fields: item.fields ?? {},
-            url: item.url ?? undefined,
-          })),
-        }),
-      };
-    },
-  );
-
   server.registerTool(
     "list_work_item_types",
     {

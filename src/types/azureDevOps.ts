@@ -557,16 +557,6 @@ export const workItemOutputSchema = workItemSchema;
 export const updatePullRequestOutputSchema = gitPullRequestSchema;
 
 /**
- * Work items batch schema.
- * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
- * - WorkItem[]
- */
-const batchWorkItemSchema = workItemSchema;
-export const batchWorkItemsOutputSchema = z
-  .object({ workItems: z.array(batchWorkItemSchema) })
-  .passthrough();
-
-/**
  * Work item types list schema.
  * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
  * - WorkItemType
