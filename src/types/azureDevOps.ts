@@ -428,6 +428,7 @@ const workItemQueryResultSchema = z
           .partial(),
       )
       .optional(),
+    workItemDetails: z.array(workItemSchema).optional(),
   })
   .partial()
   .passthrough();

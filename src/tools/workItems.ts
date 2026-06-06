@@ -263,6 +263,19 @@ export function registerWorkItemTools(
           .positive()
           .optional()
           .describe("最多回傳幾筆結果"),
+        fetchFields: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "若提供此參數，查詢後會自動批次取得工作項目詳細資料並回傳於 workItemDetails。" +
+              "傳入空陣列表示取得所有欄位；傳入欄位清單則只取指定欄位以節省 token。" +
+              "常用欄位：System.Id, System.Title, System.State, System.AssignedTo, " +
+              "System.WorkItemType, System.Description, System.AreaPath, System.IterationPath, " +
+              "System.Tags, System.CreatedDate, System.CreatedBy, System.ChangedDate, System.ChangedBy, " +
+              "System.CommentCount, Microsoft.VSTS.Common.Priority, Microsoft.VSTS.Common.Severity, " +
+              "Microsoft.VSTS.Common.AcceptanceCriteria, Microsoft.VSTS.Scheduling.StoryPoints, " +
+              "Microsoft.VSTS.Scheduling.RemainingWork, Microsoft.VSTS.Scheduling.CompletedWork",
+          ),
       },
       outputSchema: queryWorkItemsOutputSchema,
     },
@@ -270,10 +283,12 @@ export function registerWorkItemTools(
       project,
       wiql,
       top,
+      fetchFields,
     }: {
       project?: string;
       wiql: string;
       top?: number;
+      fetchFields?: string[];
     }) => {
       const teamContext: CoreInterfaces.TeamContext | undefined = project
         ? { project }
@@ -297,6 +312,55 @@ export function registerWorkItemTools(
         source?: { id?: number; url?: string };
         target?: { id?: number; url?: string };
       }>(wiqlResult.workItemRelations);
+
+      let workItemDetails:
+        | Array<{
+            id?: number;
+            rev?: number;
+            fields?: Record<string, unknown>;
+            url?: string;
+          }>
+        | undefined;
+      if (fetchFields !== undefined && workItems.length > 0) {
+        const ids = workItems
+          .map((item) => item.id)
+          .filter((id): id is number => id !== undefined);
+        const fieldsParam = fetchFields.length > 0 ? fetchFields : undefined;
+        const chunkSize = 200;
+        const fetched: Array<{
+          id?: number;
+          rev?: number;
+          fields?: Record<string, unknown>;
+          url?: string;
+        }> = [];
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          const chunk = ids.slice(i, i + chunkSize);
+          const items = await witApi.getWorkItems(
+            chunk,
+            fieldsParam,
+            undefined,
+            undefined,
+            undefined,
+            project,
+          );
+          for (const item of ensureArray(items)) {
+            const wi = item as {
+              id?: number;
+              rev?: number;
+              fields?: Record<string, unknown>;
+              url?: string;
+            };
+            fetched.push({
+              id: wi.id ?? undefined,
+              rev: wi.rev ?? undefined,
+              fields: wi.fields ?? {},
+              url: wi.url ?? undefined,
+            });
+          }
+        }
+        workItemDetails = fetched;
+      }
+
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
@@ -330,6 +394,7 @@ export function registerWorkItemTools(
                 }
               : undefined,
           })),
+          workItemDetails,
         }),
       };
     },
