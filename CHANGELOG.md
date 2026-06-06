@@ -4,6 +4,21 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，版本號遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.4.0] - 2026-06-06
+
+### Added
+
+- 新增 Pipelines 模組，包含 `list_pipelines`、`list_pipeline_runs`、`get_pipeline_run`、`queue_pipeline` 工具
+- 新增 `get_pipeline_definition` 工具，取得 Pipeline 定義的詳細資訊（repository、變數等）
+- 新增 `get_pipeline_definition_yaml` 工具，取得 Pipeline 的完整 YAML 內容
+- 新增 `get_build_logs` 工具，取得 Build log 清單或特定 log 內容
+- 新增 PR 評審操作工具：`update_pull_request_reviewer`、`reply_pull_request_thread`、`update_pull_request_thread`、`get_pull_request_file_changes`
+- 新增 `get_work_item_comments` 工具，取得工作項目的評論清單
+
+### Changed
+
+- 移除 `dotenv-cli` 依賴，改用 Bun 原生 `.env` 支援
+
 ## [0.3.1] - 2026-06-06
 
 ### Changed
