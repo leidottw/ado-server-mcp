@@ -1,5 +1,6 @@
 import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
 import type * as WorkItemTrackingInterfaces from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
+import { WorkItemExpand } from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
 import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -43,18 +44,47 @@ export function registerWorkItemTools(
               "Microsoft.VSTS.Common.AcceptanceCriteria, Microsoft.VSTS.Scheduling.StoryPoints, " +
               "Microsoft.VSTS.Scheduling.RemainingWork, Microsoft.VSTS.Scheduling.CompletedWork",
           ),
+        includeLinks: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("是否回傳 _links（HATEOAS 導覽連結，共 6 個 href），預設 false"),
+        includeRelations: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("是否回傳 relations（關聯工作項目清單），預設 false"),
       },
       outputSchema: workItemOutputSchema,
     },
-    async ({ id, fields }: { id: number; fields?: string[] }) => {
-      const response = await witApi.getWorkItem(id, fields);
+    async ({
+      id,
+      fields,
+      includeLinks,
+      includeRelations,
+    }: {
+      id: number;
+      fields?: string[];
+      includeLinks: boolean;
+      includeRelations: boolean;
+    }) => {
+      const expand =
+        includeLinks && includeRelations
+          ? WorkItemExpand.All
+          : includeLinks
+            ? WorkItemExpand.Links
+            : includeRelations
+              ? WorkItemExpand.Relations
+              : WorkItemExpand.None;
+      const response = await witApi.getWorkItem(id, fields, undefined, expand);
       const rawFields = response?.fields;
       const responseFields = ensureRecord(rawFields);
       const assignedToRaw = responseFields["System.AssignedTo"];
-      const relations =
-        ensureArray<WorkItemTrackingInterfaces.WorkItemRelation>(
-          response?.relations,
-        );
+      const relations = includeRelations
+        ? ensureArray<WorkItemTrackingInterfaces.WorkItemRelation>(
+            response?.relations,
+          )
+        : undefined;
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
@@ -65,7 +95,7 @@ export function registerWorkItemTools(
           assignedTo: cleanAssignedTo(assignedToRaw),
           fields: responseFields,
           relations,
-          _links: response?._links ?? undefined,
+          _links: includeLinks ? (response?._links ?? undefined) : undefined,
           commentVersionRef: response?.commentVersionRef ?? undefined,
           url: response?.url ?? undefined,
         }),
