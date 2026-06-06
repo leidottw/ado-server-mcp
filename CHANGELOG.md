@@ -4,6 +4,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，版本號遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.3.1] - 2026-06-06
+
+### Changed
+
+- `get_work_item` 新增 `includeLinks` 與 `includeRelations` 參數（預設 `false`），明確控制是否回傳 `_links` 與 `relations`，減少欄位過濾時的回傳雜訊
+
 ## [0.3.0] - 2026-06-06
 
 ### Added
