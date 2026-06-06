@@ -7,10 +7,14 @@ import {
   normalizeAzureDevOpsDates,
   createPullRequestCommentOutputSchema,
   createPullRequestOutputSchema,
+  getPullRequestFileChangesOutputSchema,
   pullRequestDetailOutputSchema,
   pullRequestSummaryOutputSchema,
   pullRequestThreadOutputSchema,
   repositoryOutputSchema,
+  replyPrThreadCommentOutputSchema,
+  updatePrReviewerOutputSchema,
+  updatePrThreadOutputSchema,
   updatePullRequestOutputSchema,
 } from "../types/azureDevOps.js";
 
@@ -365,6 +369,243 @@ export function registerPullRequestTools(
           status: response?.status ?? undefined,
           url: response?.url ?? undefined,
         },
+      };
+    },
+  );
+
+  server.registerTool(
+    "update_pull_request_reviewer",
+    {
+      description:
+        "設定或更新拉取請求的審查者投票（核准、拒絕等）",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID"),
+        pullRequestId: z
+          .number()
+          .int()
+          .positive()
+          .describe("拉取請求編號"),
+        reviewerId: z.string().min(1).describe("審查者的身份 ID"),
+        vote: z
+          .union([
+            z.literal(10),
+            z.literal(5),
+            z.literal(0),
+            z.literal(-5),
+            z.literal(-10),
+          ])
+          .describe(
+            "投票值：10=核准、5=核准附建議、0=無意見（重設）、-5=等待作者、-10=拒絕",
+          ),
+      },
+      outputSchema: updatePrReviewerOutputSchema,
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+      reviewerId,
+      vote,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+      reviewerId: string;
+      vote: 10 | 5 | 0 | -5 | -10;
+    }) => {
+      const reviewer: GitInterfaces.IdentityRefWithVote = { vote };
+      const response = await gitApi.createPullRequestReviewer(
+        reviewer,
+        repositoryId,
+        pullRequestId,
+        reviewerId,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}),
+      };
+    },
+  );
+
+  server.registerTool(
+    "reply_pull_request_thread",
+    {
+      description: "在拉取請求的現有評論串中新增回覆",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID"),
+        pullRequestId: z
+          .number()
+          .int()
+          .positive()
+          .describe("拉取請求編號"),
+        threadId: z.number().int().positive().describe("評論串 ID"),
+        content: z.string().min(1).describe("回覆內容"),
+      },
+      outputSchema: replyPrThreadCommentOutputSchema,
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+      threadId,
+      content,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+      threadId: number;
+      content: string;
+    }) => {
+      const comment: GitInterfaces.Comment = {
+        parentCommentId: 0,
+        content,
+        commentType: 1,
+      };
+      const response = await gitApi.createComment(
+        comment,
+        repositoryId,
+        pullRequestId,
+        threadId,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}),
+      };
+    },
+  );
+
+  server.registerTool(
+    "update_pull_request_thread",
+    {
+      description: "更新拉取請求評論串的狀態（例如標記為已解決）",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID"),
+        pullRequestId: z
+          .number()
+          .int()
+          .positive()
+          .describe("拉取請求編號"),
+        threadId: z.number().int().positive().describe("評論串 ID"),
+        status: z
+          .enum([
+            "active",
+            "byDesign",
+            "closed",
+            "fixed",
+            "pending",
+            "unknown",
+            "wontFix",
+          ])
+          .describe(
+            "新狀態：active=進行中、fixed=已修正、wontFix=不修正、closed=已關閉、byDesign=設計如此、pending=待確認",
+          ),
+      },
+      outputSchema: updatePrThreadOutputSchema,
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+      threadId,
+      status,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+      threadId: number;
+      status:
+        | "active"
+        | "byDesign"
+        | "closed"
+        | "fixed"
+        | "pending"
+        | "unknown"
+        | "wontFix";
+    }) => {
+      const statusMap: Record<string, GitInterfaces.CommentThreadStatus> = {
+        unknown: GitInterfaces.CommentThreadStatus.Unknown,
+        active: GitInterfaces.CommentThreadStatus.Active,
+        fixed: GitInterfaces.CommentThreadStatus.Fixed,
+        wontFix: GitInterfaces.CommentThreadStatus.WontFix,
+        closed: GitInterfaces.CommentThreadStatus.Closed,
+        byDesign: GitInterfaces.CommentThreadStatus.ByDesign,
+        pending: GitInterfaces.CommentThreadStatus.Pending,
+      };
+      const thread: GitInterfaces.GitPullRequestCommentThread = {
+        status: statusMap[status],
+      };
+      const response = await gitApi.updateThread(
+        thread,
+        repositoryId,
+        pullRequestId,
+        threadId,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_pull_request_file_changes",
+    {
+      description:
+        "取得拉取請求的檔案變更清單（最後一次 iteration 的 diff）",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID"),
+        pullRequestId: z
+          .number()
+          .int()
+          .positive()
+          .describe("拉取請求編號"),
+        top: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("最多回傳的變更筆數"),
+      },
+      outputSchema: getPullRequestFileChangesOutputSchema,
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+      top,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+      top?: number;
+    }) => {
+      const iterations = await gitApi.getPullRequestIterations(
+        repositoryId,
+        pullRequestId,
+      );
+      const iterationList =
+        ensureArray<GitInterfaces.GitPullRequestIteration>(iterations);
+      if (iterationList.length === 0) {
+        return { content: [], structuredContent: { changeEntries: [] } };
+      }
+      const latestIterationId =
+        iterationList[iterationList.length - 1].id ?? 1;
+      const changes = await gitApi.getPullRequestIterationChanges(
+        repositoryId,
+        pullRequestId,
+        latestIterationId,
+        undefined,
+        top,
+      );
+      const changeEntries = ensureArray<GitInterfaces.GitPullRequestChange>(
+        changes?.changeEntries,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          changeEntries: changeEntries.map((c) => ({
+            changeType: c.changeType ?? undefined,
+            changeId: c.changeId ?? undefined,
+            item: c.item
+              ? {
+                  path: (c.item as { path?: string }).path ?? undefined,
+                  url: (c.item as { url?: string }).url ?? undefined,
+                }
+              : undefined,
+          })),
+        }),
       };
     },
   );
