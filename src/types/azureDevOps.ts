@@ -623,6 +623,25 @@ export const listPipelineRunsOutputSchema = z
 
 export const queuePipelineOutputSchema = buildSchema;
 
+const buildLogSchema = z
+  .object({
+    id: z.number(),
+    type: z.string(),
+    url: z.string(),
+    lineCount: z.number(),
+    createdOn: z.string(),
+    lastChangedOn: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+export const getBuildLogsOutputSchema = z
+  .object({
+    logs: z.array(buildLogSchema).optional(),
+    lines: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
 // ─── PR Review Schemas ─────────────────────────────────────────────────────────
 
 export const updatePrReviewerOutputSchema = identityRefWithVoteSchema;

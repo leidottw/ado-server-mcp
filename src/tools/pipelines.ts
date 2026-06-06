@@ -5,6 +5,7 @@ import * as z from "zod";
 import {
   ensureArray,
   normalizeAzureDevOpsDates,
+  getBuildLogsOutputSchema,
   listPipelinesOutputSchema,
   getPipelineRunOutputSchema,
   listPipelineRunsOutputSchema,
@@ -225,6 +226,78 @@ export function registerPipelineTools(
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates(mapBuild(queued)),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_build_logs",
+    {
+      description:
+        "取得 Build 的 log 清單或特定 log 的內容，可用於檢視 PR 觸發的 CI 建置結果。省略 logId 時回傳所有 log 的清單（含行數），提供 logId 時回傳該 log 的文字內容。",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        buildId: z.number().int().positive().describe("Build（執行）ID"),
+        logId: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Log ID；省略時回傳 log 清單，提供時回傳 log 文字內容"),
+        startLine: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("起始行號（1-based），僅在提供 logId 時有效"),
+        endLine: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("結束行號（1-based），僅在提供 logId 時有效"),
+      },
+      outputSchema: getBuildLogsOutputSchema,
+    },
+    async ({
+      project,
+      buildId,
+      logId,
+      startLine,
+      endLine,
+    }: {
+      project: string;
+      buildId: number;
+      logId?: number;
+      startLine?: number;
+      endLine?: number;
+    }) => {
+      if (logId !== undefined) {
+        const lines = await buildApi.getBuildLogLines(
+          project,
+          buildId,
+          logId,
+          startLine,
+          endLine,
+        );
+        return {
+          content: [],
+          structuredContent: { lines: ensureArray<string>(lines) },
+        };
+      }
+      const logs = await buildApi.getBuildLogs(project, buildId);
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          logs: ensureArray<BuildInterfaces.BuildLog>(logs).map((l) => ({
+            id: l.id ?? undefined,
+            type: l.type ?? undefined,
+            url: l.url ?? undefined,
+            lineCount: l.lineCount ?? undefined,
+            createdOn: l.createdOn ?? undefined,
+            lastChangedOn: l.lastChangedOn ?? undefined,
+          })),
+        }),
       };
     },
   );
