@@ -10,9 +10,9 @@
 - `create_work_item` - 建立新的工作項目
 - `update_work_item` - 更新工作項目欄位或工作流程狀態
 - `query_work_items` - 使用 WIQL 查詢工作項目
-- `get_work_items_batch` - 批次取得多個工作項目的詳細資料
 - `list_work_item_types` - 列出專案中可用的工作項目類型
 - `add_work_item_comment` - 在工作項目上新增評論
+- `get_work_item_comments` - 取得工作項目的評論清單
 
 ### 拉取請求管理
 
@@ -22,6 +22,20 @@
 - `create_pull_request` - 建立新的拉取請求
 - `create_pull_request_comment` - 在拉取請求上建立新評論回覆串
 - `update_pull_request` - 更新拉取請求
+- `update_pull_request_reviewer` - 設定或更新拉取請求的審查者投票（核准、拒絕等）
+- `reply_pull_request_thread` - 在拉取請求的現有評論串中新增回覆
+- `update_pull_request_thread` - 更新拉取請求評論串的狀態（例如標記為已解決）
+- `get_pull_request_file_changes` - 取得拉取請求的檔案變更清單
+
+### Pipeline 管理
+
+- `list_pipelines` - 列出專案中的 CI/CD Pipeline 定義（Build Definitions）
+- `list_pipeline_runs` - 列出 Pipeline 的執行歷程（Builds）
+- `get_pipeline_run` - 取得單一 Pipeline 執行（Build）的詳細資訊與結果
+- `queue_pipeline` - 觸發 Pipeline 執行（Queue a Build）
+- `get_pipeline_definition` - 取得單一 Pipeline 定義的詳細資訊，包含 repository、變數與觸發設定
+- `get_pipeline_definition_yaml` - 取得 Pipeline 定義的完整 YAML 內容
+- `get_build_logs` - 取得 Build 的 log 清單或特定 log 的內容
 
 ### 專案管理
 
@@ -127,12 +141,38 @@ bun install
 | `AZURE_DEVOPS_TOKEN`           | Personal Access Token，用於 API 認證                 | `[your-pat-token]`                                  |
 | `NODE_TLS_REJECT_UNAUTHORIZED` | 若使用自簽章 HTTPS，設定爲 `0` 以允許繞過驗證        | `0` 或 `1` (預設)                                   |
 
+### 本機 MCP 設定
+
+開發時可將 AI 工具指向本機 `bun start`，環境變數由 `.env` 自動載入，無需額外設定。
+
+**GitHub Copilot (VS Code)**：加入 MCP User Configuration：
+
+```json
+{
+  "servers": {
+    "azure-devops-server-mcp-dev": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["start"]
+    }
+  }
+}
+```
+
+**Claude Code**：
+
+```bash
+claude mcp add azure-devops-server-mcp-dev -- bun start
+```
+
 ### 常用命令
 
 | 命令            | 說明                                                            |
 | --------------- | --------------------------------------------------------------- |
 | `bun start`     | 直接啟動 MCP server (開發用)                                    |
 | `bun run build` | 編譯 TypeScript 為 Node.js 可執行的 JavaScript，輸出到 `./dist` |
+
+> **發佈前注意**：發佈到 registry 前必須先執行 `bun run build`，確保 `dist/` 為最新版本。
 
 ### 專案結構
 
