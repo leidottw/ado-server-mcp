@@ -4,6 +4,17 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，版本號遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.3.0] - 2026-06-06
+
+### Added
+
+- `get_work_item` 支援 `fields` 參數，可指定要回傳的欄位清單
+- `query_work_items` 支援 `fetchFields` 參數，可在 WIQL 查詢後一次取得指定欄位的工作項目詳細資料
+
+### Removed
+
+- 移除 `get_work_items_batch` tool，功能由 `query_work_items` 搭配 `fetchFields` 取代
+
 ## [0.2.1] - 2026-06-05
 
 ### Added
