@@ -572,6 +572,85 @@ export const workItemTypesOutputSchema = z
  */
 export const addWorkItemCommentOutputSchema = workItemCommentSchema;
 
+// ─── Pipeline (Build) Schemas ─────────────────────────────────────────────────
+
+const buildDefinitionReferenceSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    path: z.string(),
+    url: z.string(),
+    queueStatus: z.number(),
+    type: z.number(),
+  })
+  .partial()
+  .passthrough();
+
+const buildSchema = z
+  .object({
+    id: z.number(),
+    buildNumber: z.string(),
+    status: z.number(),
+    result: z.number(),
+    queueTime: z.string(),
+    startTime: z.string(),
+    finishTime: z.string(),
+    url: z.string(),
+    definition: buildDefinitionReferenceSchema,
+    requestedBy: identityRefSchema,
+    requestedFor: identityRefSchema,
+    sourceBranch: z.string(),
+    sourceVersion: z.string(),
+    parameters: z.string(),
+    project: teamProjectReferenceSchema,
+    reason: z.number(),
+  })
+  .partial()
+  .passthrough();
+
+export const listPipelinesOutputSchema = z
+  .object({
+    project: z.string(),
+    pipelines: z.array(buildDefinitionReferenceSchema),
+  })
+  .passthrough();
+
+export const getPipelineRunOutputSchema = buildSchema;
+
+export const listPipelineRunsOutputSchema = z
+  .object({ runs: z.array(buildSchema) })
+  .passthrough();
+
+export const queuePipelineOutputSchema = buildSchema;
+
+// ─── PR Review Schemas ─────────────────────────────────────────────────────────
+
+export const updatePrReviewerOutputSchema = identityRefWithVoteSchema;
+
+export const replyPrThreadCommentOutputSchema = pullRequestCommentOutputSchema;
+
+export const updatePrThreadOutputSchema = pullRequestThreadOutputSchemaInternal;
+
+const gitChangeSchema = z
+  .object({
+    changeType: z.number(),
+    changeId: z.number(),
+    item: z
+      .object({
+        path: z.string(),
+        url: z.string(),
+      })
+      .partial()
+      .passthrough()
+      .optional(),
+  })
+  .partial()
+  .passthrough();
+
+export const getPullRequestFileChangesOutputSchema = z
+  .object({ changeEntries: z.array(gitChangeSchema) })
+  .passthrough();
+
 export function ensureArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value : [];
 }
