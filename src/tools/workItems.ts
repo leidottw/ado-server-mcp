@@ -32,14 +32,26 @@ export function registerWorkItemTools(
       description: "取得單一工作項目詳細資料，包括已清理的指派者資訊",
       inputSchema: {
         id: workItemIdSchema.describe("工作項目編號"),
+        fields: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "要回傳的欄位 referenceName 清單，留空則回傳所有欄位。" +
+              "常用欄位：System.Id, System.Title, System.State, System.AssignedTo, " +
+              "System.WorkItemType, System.Description, System.AreaPath, System.IterationPath, " +
+              "System.Tags, System.CreatedDate, System.CreatedBy, System.ChangedDate, System.ChangedBy, " +
+              "System.CommentCount, Microsoft.VSTS.Common.Priority, Microsoft.VSTS.Common.Severity, " +
+              "Microsoft.VSTS.Common.AcceptanceCriteria, Microsoft.VSTS.Scheduling.StoryPoints, " +
+              "Microsoft.VSTS.Scheduling.RemainingWork, Microsoft.VSTS.Scheduling.CompletedWork",
+          ),
       },
       outputSchema: workItemOutputSchema,
     },
-    async ({ id }: { id: number }) => {
-      const response = await witApi.getWorkItem(id);
+    async ({ id, fields }: { id: number; fields?: string[] }) => {
+      const response = await witApi.getWorkItem(id, fields);
       const rawFields = response?.fields;
-      const fields = ensureRecord(rawFields);
-      const assignedToRaw = fields["System.AssignedTo"];
+      const responseFields = ensureRecord(rawFields);
+      const assignedToRaw = responseFields["System.AssignedTo"];
       const relations =
         ensureArray<WorkItemTrackingInterfaces.WorkItemRelation>(
           response?.relations,
@@ -49,10 +61,10 @@ export function registerWorkItemTools(
         structuredContent: normalizeAzureDevOpsDates({
           id: response?.id,
           rev: response?.rev,
-          title: fields["System.Title"] ?? undefined,
-          state: fields["System.State"] ?? undefined,
+          title: responseFields["System.Title"] ?? undefined,
+          state: responseFields["System.State"] ?? undefined,
           assignedTo: cleanAssignedTo(assignedToRaw),
-          fields,
+          fields: responseFields,
           relations,
           _links: response?._links ?? undefined,
           commentVersionRef: response?.commentVersionRef ?? undefined,
