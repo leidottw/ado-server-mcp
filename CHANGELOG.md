@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-06-07
+
+### Fixed
+
+- 修正 `create_pull_request_thread`、`get_pull_request_threads`、`update_pull_request_thread` 輸出結構驗證錯誤：ADO API 回傳的 `status` 為數字 enum，output schema 錯誤定義為 `string`，導致 MCP output validation 失敗
+
 ## [0.5.0] - 2026-06-07
 
 ### Added
