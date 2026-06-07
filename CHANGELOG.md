@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-07
+
 ### Added
 
 - 新增 `get_pull_request_threads` 工具，取得 PR 所有討論串（獨立於 `get_pull_request_details` 之外，供防呆檢查使用）
