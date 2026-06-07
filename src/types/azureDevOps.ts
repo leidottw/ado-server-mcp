@@ -257,7 +257,7 @@ const pullRequestThreadOutputSchemaInternal = z
     _links: z.any().optional(),
     id: z.number(),
     comments: z.array(pullRequestCommentOutputSchema),
-    identities: z.record(z.string(), identityRefSchema),
+    identities: z.record(z.string(), identityRefSchema).nullable(),
     isDeleted: z.boolean(),
     lastUpdatedDate: z.string(),
     properties: z.record(z.string(), z.unknown()).optional(),

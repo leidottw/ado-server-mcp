@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 修正 `get_pull_request_threads` 輸出結構驗證錯誤：ADO API 回傳的 `identities` 欄位可能為 `null`，output schema 缺少 `nullable()` 導致 MCP output validation 失敗
+
 ## [0.5.2] - 2026-06-07
 
 ### Fixed
