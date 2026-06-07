@@ -262,7 +262,7 @@ const pullRequestThreadOutputSchemaInternal = z
     lastUpdatedDate: z.string(),
     properties: z.record(z.string(), z.unknown()).optional(),
     publishedDate: z.string(),
-    status: z.string(),
+    status: z.number(),
     threadContext: commentThreadContextSchema.optional().nullable(), // 這裡發現與文件不相符, 實際測試發現可能為 null, 因此加上 nullable(),
     pullRequestThreadContext: gitPullRequestCommentThreadContextSchema
       .optional()
