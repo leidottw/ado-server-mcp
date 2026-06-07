@@ -18,14 +18,16 @@
 
 - `get_repositories` - 列出指定專案內的 Git 儲存庫
 - `get_pull_requests` - 取得指定專案下的 Git 拉取請求
-- `get_pull_request_details` - 取得單一拉取請求詳細資訊與對話串內容
+- `get_pull_request_details` - 取得單一拉取請求詳細資訊（含所有討論串）
 - `create_pull_request` - 建立新的拉取請求
-- `create_pull_request_comment` - 在拉取請求上建立新評論回覆串
-- `update_pull_request` - 更新拉取請求
+- `create_pull_request_thread` - 在拉取請求上建立新討論串（支援錨定至特定程式碼行）
+- `create_pull_request_thread_comment` - 在拉取請求的現有討論串中新增留言
+- `get_pull_request_threads` - 取得拉取請求的所有討論串
+- `get_pull_request_changes` - 取得拉取請求的檔案變更清單
+- `get_pull_request_statuses` - 取得拉取請求的 CI/build 狀態清單
+- `update_pull_request` - 更新拉取請求（標題、說明、狀態、草稿模式）
 - `update_pull_request_reviewer` - 設定或更新拉取請求的審查者投票（核准、拒絕等）
-- `reply_pull_request_thread` - 在拉取請求的現有評論串中新增回覆
-- `update_pull_request_thread` - 更新拉取請求評論串的狀態（例如標記為已解決）
-- `get_pull_request_file_changes` - 取得拉取請求的檔案變更清單
+- `update_pull_request_thread` - 更新拉取請求討論串的狀態（例如標記為已解決）
 
 ### Pipeline 管理
 
@@ -78,7 +80,7 @@
     }
   ],
   "servers": {
-    "azure-devops-server-mcp": {
+    "azure-devops-server": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@cb/ado-server-mcp"],
@@ -99,7 +101,7 @@
 ```json
 {
   "mcpServers": {
-    "azure-devops-server-mcp": {
+    "azure-devops-server": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@cb/ado-server-mcp"],
@@ -116,7 +118,7 @@
 或直接使用 CLI 新增（效果相同）：
 
 ```bash
-claude mcp add --scope user azure-devops-server-mcp \
+claude mcp add --scope user azure-devops-server \
   -e AZURE_DEVOPS_URL=https://my-server/DefaultCollection \
   -e AZURE_DEVOPS_TOKEN=your-pat-token \
   -e NODE_TLS_REJECT_UNAUTHORIZED=0 \
@@ -150,7 +152,7 @@ bun install
 ```json
 {
   "servers": {
-    "azure-devops-server-mcp-dev": {
+    "azure-devops-server-dev": {
       "type": "stdio",
       "command": "bun",
       "args": ["start"]
@@ -162,7 +164,7 @@ bun install
 **Claude Code**：
 
 ```bash
-claude mcp add azure-devops-server-mcp-dev -- bun start
+claude mcp add azure-devops-server-dev -- bun start
 ```
 
 ### 常用命令

@@ -5,14 +5,16 @@ import * as z from "zod";
 import {
   ensureArray,
   normalizeAzureDevOpsDates,
-  createPullRequestCommentOutputSchema,
+  createPullRequestThreadOutputSchema,
+  createPullRequestThreadCommentOutputSchema,
   createPullRequestOutputSchema,
-  getPullRequestFileChangesOutputSchema,
+  getPullRequestChangesOutputSchema,
+  getPullRequestThreadsOutputSchema,
+  getPullRequestStatusesOutputSchema,
   pullRequestDetailOutputSchema,
   pullRequestSummaryOutputSchema,
   pullRequestThreadOutputSchema,
   repositoryOutputSchema,
-  replyPrThreadCommentOutputSchema,
   updatePrReviewerOutputSchema,
   updatePrThreadOutputSchema,
   updatePullRequestOutputSchema,
@@ -212,7 +214,7 @@ export function registerPullRequestTools(
     {
       description: "建立新的拉取請求",
       inputSchema: {
-        repositoryId: z.string().min(1).describe("儲存庫 ID"),
+        repositoryId: z.string().min(1).describe("儲存庫的 GUID（不支援名稱），可透過 list_repositories 取得"),
         sourceRefName: z
           .string()
           .min(1)
@@ -272,33 +274,81 @@ export function registerPullRequestTools(
   );
 
   server.registerTool(
-    "create_pull_request_comment",
+    "create_pull_request_thread",
     {
-      description: "在拉取請求上建立新評論回覆串",
+      description:
+        "在拉取請求上建立新討論串。提供 filePath 與 lineNumber 可將討論串錨定至特定程式碼行（行號需從 get_pull_request_changes 的 unified diff 推算）",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
         pullRequestId: z.number().int().positive().describe("拉取請求編號"),
-        content: z.string().min(1).describe("評論內容"),
+        content: z.string().min(1).describe("討論串第一則留言內容"),
+        filePath: z
+          .string()
+          .optional()
+          .describe("錨定的檔案路徑（前導 /），例如 /src/app/foo.ts"),
+        lineNumber: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("錨定的新檔行號（來自 unified diff 推算，需同時提供 filePath）"),
+        status: z
+          .enum([
+            "active",
+            "byDesign",
+            "closed",
+            "fixed",
+            "pending",
+            "unknown",
+            "wontFix",
+          ])
+          .optional()
+          .describe("討論串初始狀態，建立新討論串通常填 active"),
       },
-      outputSchema: createPullRequestCommentOutputSchema,
+      outputSchema: createPullRequestThreadOutputSchema,
     },
     async ({
       repositoryId,
       pullRequestId,
       content,
+      filePath,
+      lineNumber,
+      status,
     }: {
       repositoryId: string;
       pullRequestId: number;
       content: string;
+      filePath?: string;
+      lineNumber?: number;
+      status?:
+        | "active"
+        | "byDesign"
+        | "closed"
+        | "fixed"
+        | "pending"
+        | "unknown"
+        | "wontFix";
     }) => {
+      const statusMap: Record<string, GitInterfaces.CommentThreadStatus> = {
+        unknown: GitInterfaces.CommentThreadStatus.Unknown,
+        active: GitInterfaces.CommentThreadStatus.Active,
+        fixed: GitInterfaces.CommentThreadStatus.Fixed,
+        wontFix: GitInterfaces.CommentThreadStatus.WontFix,
+        closed: GitInterfaces.CommentThreadStatus.Closed,
+        byDesign: GitInterfaces.CommentThreadStatus.ByDesign,
+        pending: GitInterfaces.CommentThreadStatus.Pending,
+      };
       const newThread: GitInterfaces.GitPullRequestCommentThread = {
-        comments: [
-          {
-            parentCommentId: 0,
-            content,
-            commentType: 1,
-          },
-        ],
+        comments: [{ parentCommentId: 0, content, commentType: 1 }],
+        status: status ? statusMap[status] : undefined,
+        threadContext:
+          filePath && lineNumber
+            ? {
+                filePath,
+                rightFileStart: { line: lineNumber, offset: 1 },
+                rightFileEnd: { line: lineNumber, offset: 1 },
+              }
+            : undefined,
       };
       const response = await gitApi.createThread(
         newThread,
@@ -312,6 +362,7 @@ export function registerPullRequestTools(
         structuredContent: normalizeAzureDevOpsDates({
           id: response?.id ?? undefined,
           status: response?.status ?? undefined,
+          threadContext: response?.threadContext ?? undefined,
           comments,
         }),
       };
@@ -420,15 +471,15 @@ export function registerPullRequestTools(
       );
       return {
         content: [],
-        structuredContent: normalizeAzureDevOpsDates(response ?? {}),
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<string, unknown>,
       };
     },
   );
 
   server.registerTool(
-    "reply_pull_request_thread",
+    "create_pull_request_thread_comment",
     {
-      description: "在拉取請求的現有評論串中新增回覆",
+      description: "在拉取請求的現有討論串中新增留言",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
         pullRequestId: z
@@ -436,10 +487,10 @@ export function registerPullRequestTools(
           .int()
           .positive()
           .describe("拉取請求編號"),
-        threadId: z.number().int().positive().describe("評論串 ID"),
-        content: z.string().min(1).describe("回覆內容"),
+        threadId: z.number().int().positive().describe("討論串 ID"),
+        content: z.string().min(1).describe("留言內容"),
       },
-      outputSchema: replyPrThreadCommentOutputSchema,
+      outputSchema: createPullRequestThreadCommentOutputSchema,
     },
     async ({
       repositoryId,
@@ -465,7 +516,7 @@ export function registerPullRequestTools(
       );
       return {
         content: [],
-        structuredContent: normalizeAzureDevOpsDates(response ?? {}),
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<string, unknown>,
       };
     },
   );
@@ -536,16 +587,16 @@ export function registerPullRequestTools(
       );
       return {
         content: [],
-        structuredContent: normalizeAzureDevOpsDates(response ?? {}),
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<string, unknown>,
       };
     },
   );
 
   server.registerTool(
-    "get_pull_request_file_changes",
+    "get_pull_request_changes",
     {
       description:
-        "取得拉取請求的檔案變更清單（最後一次 iteration 的 diff）",
+        "取得拉取請求的檔案變更清單（取最新一次 iteration 的變更）",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
         pullRequestId: z
@@ -560,7 +611,7 @@ export function registerPullRequestTools(
           .optional()
           .describe("最多回傳的變更筆數"),
       },
-      outputSchema: getPullRequestFileChangesOutputSchema,
+      outputSchema: getPullRequestChangesOutputSchema,
     },
     async ({
       repositoryId,
@@ -580,8 +631,7 @@ export function registerPullRequestTools(
       if (iterationList.length === 0) {
         return { content: [], structuredContent: { changeEntries: [] } };
       }
-      const latestIterationId =
-        iterationList[iterationList.length - 1].id ?? 1;
+      const latestIterationId = iterationList.at(-1)?.id ?? 1;
       const changes = await gitApi.getPullRequestIterationChanges(
         repositoryId,
         pullRequestId,
@@ -605,6 +655,78 @@ export function registerPullRequestTools(
                 }
               : undefined,
           })),
+        }),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_pull_request_threads",
+    {
+      description: "取得拉取請求的所有討論串",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID"),
+        pullRequestId: z
+          .number()
+          .int()
+          .positive()
+          .describe("拉取請求編號"),
+      },
+      outputSchema: getPullRequestThreadsOutputSchema,
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+    }) => {
+      const threads = await gitApi.getThreads(
+        repositoryId,
+        pullRequestId,
+        undefined,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          threads: ensureArray<GitInterfaces.GitPullRequestCommentThread>(
+            threads,
+          ),
+        }),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_pull_request_statuses",
+    {
+      description: "取得拉取請求的 CI/build 狀態清單",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID"),
+        pullRequestId: z
+          .number()
+          .int()
+          .positive()
+          .describe("拉取請求編號"),
+      },
+      outputSchema: getPullRequestStatusesOutputSchema,
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+    }) => {
+      const statuses = await gitApi.getPullRequestStatuses(
+        repositoryId,
+        pullRequestId,
+        undefined,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          statuses: ensureArray<GitInterfaces.GitPullRequestStatus>(statuses),
         }),
       };
     },

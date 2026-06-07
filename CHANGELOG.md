@@ -4,6 +4,20 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，版本號遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### Added
+
+- 新增 `get_pull_request_threads` 工具，取得 PR 所有討論串（獨立於 `get_pull_request_details` 之外，供防呆檢查使用）
+- 新增 `get_pull_request_statuses` 工具，取得 PR 的 CI/build 狀態清單
+- `create_pull_request_thread` 支援 `filePath`、`lineNumber`、`status` 參數，可將討論串錨定至特定程式碼行
+
+### Changed
+
+- `create_pull_request_comment` 更名為 `create_pull_request_thread`（對應 ADO `createThread` API，建立的實體為 Thread）
+- `reply_pull_request_thread` 更名為 `create_pull_request_thread_comment`（對應 ADO `createComment` API，建立的實體為 Thread 內的 Comment）
+- `get_pull_request_file_changes` 更名為 `get_pull_request_changes`（語意複合命名，隱藏 iteration 細節）
+
 ## [0.4.0] - 2026-06-06
 
 ### Added

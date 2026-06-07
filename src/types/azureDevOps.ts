@@ -487,12 +487,21 @@ export const pullRequestThreadOutputSchema =
   pullRequestThreadOutputSchemaInternal;
 
 /**
- * Pull request comment creation schema.
+ * Pull request thread creation schema.
  * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
  * - GitPullRequestCommentThread
  */
-export const createPullRequestCommentOutputSchema =
+export const createPullRequestThreadOutputSchema =
   pullRequestThreadOutputSchemaInternal;
+
+/**
+ * Pull request threads list schema.
+ * Derived from azure-devops-node-api interfaces/GitInterfaces.d.ts
+ * - GitPullRequestCommentThread[]
+ */
+export const getPullRequestThreadsOutputSchema = z
+  .object({ threads: z.array(pullRequestThreadOutputSchemaInternal) })
+  .passthrough();
 
 /**
  * Pull request creation schema.
@@ -715,7 +724,7 @@ export const getPipelineDefinitionYamlOutputSchema = z
 
 export const updatePrReviewerOutputSchema = identityRefWithVoteSchema;
 
-export const replyPrThreadCommentOutputSchema = pullRequestCommentOutputSchema;
+export const createPullRequestThreadCommentOutputSchema = pullRequestCommentOutputSchema;
 
 export const updatePrThreadOutputSchema = pullRequestThreadOutputSchemaInternal;
 
@@ -735,8 +744,30 @@ const gitChangeSchema = z
   .partial()
   .passthrough();
 
-export const getPullRequestFileChangesOutputSchema = z
+export const getPullRequestChangesOutputSchema = z
   .object({ changeEntries: z.array(gitChangeSchema) })
+  .passthrough();
+
+const pullRequestStatusSchema = z
+  .object({
+    id: z.number(),
+    state: z.string(),
+    description: z.string(),
+    context: z
+      .object({ genre: z.string(), name: z.string() })
+      .partial()
+      .passthrough()
+      .optional(),
+    creationDate: z.string(),
+    updatedDate: z.string(),
+    targetUrl: z.string(),
+    createdBy: identityRefSchema.optional(),
+  })
+  .partial()
+  .passthrough();
+
+export const getPullRequestStatusesOutputSchema = z
+  .object({ statuses: z.array(pullRequestStatusSchema) })
   .passthrough();
 
 export function ensureArray<T>(value: unknown): T[] {
