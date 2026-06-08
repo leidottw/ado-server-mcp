@@ -777,7 +777,7 @@ const classificationNodeSchema = z
     id: z.number(),
     identifier: z.string(),
     name: z.string(),
-    structureType: z.string(),
+    structureType: z.number(),
     hasChildren: z.boolean(),
     path: z.string(),
     attributes: z
