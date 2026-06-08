@@ -156,13 +156,18 @@ export function registerWorkItemTools(
         bypassRules,
         suppressNotifications,
       );
+      if (!response?.id) {
+        throw new Error(
+          `工作項目建立失敗：API 回傳空值。請確認專案名稱、工作項目類型與必填欄位是否正確。`,
+        );
+      }
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
-          id: response?.id,
-          rev: response?.rev,
-          url: response?.url ?? undefined,
-          fields: response?.fields ?? {},
+          id: response.id,
+          rev: response.rev,
+          url: response.url ?? undefined,
+          fields: response.fields ?? {},
         }),
       };
     },
