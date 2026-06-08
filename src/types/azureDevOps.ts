@@ -801,8 +801,8 @@ export const listIterationsOutputSchema = classificationNodeSchema;
 
 const teamIterationAttributesSchema = z
   .object({
-    startDate: z.string().optional(),
-    finishDate: z.string().optional(),
+    startDate: z.string().nullable().optional(),
+    finishDate: z.string().nullable().optional(),
     timeFrame: z.number().optional(),
   })
   .partial()
