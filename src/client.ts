@@ -1,5 +1,6 @@
 import { getPersonalAccessTokenHandler, WebApi } from "azure-devops-node-api";
 import type { IBuildApi } from "azure-devops-node-api/BuildApi";
+import type { IWorkApi } from "azure-devops-node-api/WorkApi";
 import { z } from "zod";
 
 const envSource =
@@ -32,18 +33,20 @@ export interface AzureDevOpsClient {
   git: any;
   wit: any;
   build: IBuildApi;
+  work: IWorkApi;
 }
 
 export async function getAzureDevOpsClient(): Promise<AzureDevOpsClient> {
   const authHandler = getPersonalAccessTokenHandler(env.AZURE_DEVOPS_TOKEN);
   const connection = new WebApi(baseUrl, authHandler);
-  const [core, git, wit, build] = await Promise.all([
+  const [core, git, wit, build, work] = await Promise.all([
     connection.getCoreApi(),
     connection.getGitApi(),
     connection.getWorkItemTrackingApi(),
     connection.getBuildApi(),
+    connection.getWorkApi(),
   ]);
-  return { core, git, wit, build };
+  return { core, git, wit, build, work };
 }
 
 function buildBaseUrl(rawUrl: string): string {

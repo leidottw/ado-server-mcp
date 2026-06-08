@@ -3,6 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { getAzureDevOpsClient } from "./client.js";
+import { registerIterationTools } from "./tools/iterations.js";
 import { registerPipelineTools } from "./tools/pipelines.js";
 import { registerProjectTools } from "./tools/projects.js";
 import { registerPullRequestTools } from "./tools/pullRequests.js";
@@ -17,6 +18,7 @@ async function main(): Promise<void> {
   });
 
   registerWorkItemTools(mcpServer, client.wit);
+  registerIterationTools(mcpServer, client.wit, client.work);
   registerPullRequestTools(mcpServer, client.git);
   registerProjectTools(mcpServer, client.core);
   registerPipelineTools(mcpServer, client.build, client.git);

@@ -770,6 +770,63 @@ export const getPullRequestStatusesOutputSchema = z
   .object({ statuses: z.array(pullRequestStatusSchema) })
   .passthrough();
 
+// ─── Classification Node (Iteration / Area) Schemas ──────────────────────────
+
+const classificationNodeSchema: z.ZodSchema = z.lazy(() =>
+  z
+    .object({
+      id: z.number(),
+      identifier: z.string(),
+      name: z.string(),
+      structureType: z.string(),
+      hasChildren: z.boolean(),
+      path: z.string(),
+      attributes: z
+        .object({
+          startDate: z.string().optional(),
+          finishDate: z.string().optional(),
+        })
+        .passthrough()
+        .optional(),
+      children: z.array(classificationNodeSchema).optional(),
+      url: z.string(),
+    })
+    .partial()
+    .passthrough(),
+);
+
+export const classificationNodeOutputSchema = classificationNodeSchema;
+
+export const listIterationsOutputSchema = classificationNodeSchema;
+
+// ─── Team Iteration Schemas ───────────────────────────────────────────────────
+
+const teamIterationAttributesSchema = z
+  .object({
+    startDate: z.string().optional(),
+    finishDate: z.string().optional(),
+    timeFrame: z.number().optional(),
+  })
+  .partial()
+  .passthrough();
+
+const teamSettingsIterationSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    path: z.string(),
+    attributes: teamIterationAttributesSchema.optional(),
+    url: z.string(),
+  })
+  .partial()
+  .passthrough();
+
+export const teamIterationOutputSchema = teamSettingsIterationSchema;
+
+export const listTeamIterationsOutputSchema = z
+  .object({ iterations: z.array(teamSettingsIterationSchema) })
+  .passthrough();
+
 export function ensureArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value : [];
 }

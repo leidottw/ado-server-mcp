@@ -565,6 +565,121 @@ export function registerWorkItemTools(
       };
     },
   );
+
+  server.registerTool(
+    "add_work_item_tags",
+    {
+      description:
+        "安全地附加 Tag 到工作項目，不覆蓋現有 Tag。" +
+        "內部執行：取得現有 Tags → 合併 → 更新。",
+      inputSchema: {
+        id: workItemIdSchema.describe("工作項目編號"),
+        tags: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("要附加的 Tag 陣列，例如 [\"FrontEnd\", \"模組開發\"]"),
+      },
+      outputSchema: updateWorkItemOutputSchema,
+    },
+    async ({ id, tags }: { id: number; tags: string[] }) => {
+      const existing = await witApi.getWorkItem(id, ["System.Tags"]);
+      const existingTags = parseTagString(
+        existing?.fields?.["System.Tags"] as string | undefined,
+      );
+      const merged = mergeTags(existingTags, tags);
+      const operations: VSSInterfaces.JsonPatchOperation[] = [
+        {
+          op: VSSInterfaces.Operation.Replace,
+          path: "/fields/System.Tags",
+          value: merged.join("; "),
+        },
+      ];
+      const response = await witApi.updateWorkItem(
+        undefined,
+        operations,
+        id,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          id: response?.id,
+          rev: response?.rev,
+          state: response?.fields?.["System.State"],
+          fields: response?.fields ?? {},
+          url: response?.url ?? undefined,
+        }),
+      };
+    },
+  );
+
+  server.registerTool(
+    "remove_work_item_tags",
+    {
+      description:
+        "從工作項目精確移除指定 Tag，保留其他 Tag。" +
+        "內部執行：取得現有 Tags → 移除指定項目 → 更新。",
+      inputSchema: {
+        id: workItemIdSchema.describe("工作項目編號"),
+        tags: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("要移除的 Tag 陣列"),
+      },
+      outputSchema: updateWorkItemOutputSchema,
+    },
+    async ({ id, tags }: { id: number; tags: string[] }) => {
+      const existing = await witApi.getWorkItem(id, ["System.Tags"]);
+      const existingTags = parseTagString(
+        existing?.fields?.["System.Tags"] as string | undefined,
+      );
+      const removedSet = new Set(tags.map((t) => t.trim().toLowerCase()));
+      const remaining = existingTags.filter(
+        (t) => !removedSet.has(t.toLowerCase()),
+      );
+      const operations: VSSInterfaces.JsonPatchOperation[] = [
+        {
+          op: VSSInterfaces.Operation.Replace,
+          path: "/fields/System.Tags",
+          value: remaining.join("; "),
+        },
+      ];
+      const response = await witApi.updateWorkItem(
+        undefined,
+        operations,
+        id,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          id: response?.id,
+          rev: response?.rev,
+          state: response?.fields?.["System.State"],
+          fields: response?.fields ?? {},
+          url: response?.url ?? undefined,
+        }),
+      };
+    },
+  );
+}
+
+function parseTagString(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(";")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function mergeTags(existing: string[], toAdd: string[]): string[] {
+  const lowerSet = new Set(existing.map((t) => t.toLowerCase()));
+  const result = [...existing];
+  for (const tag of toAdd) {
+    if (!lowerSet.has(tag.trim().toLowerCase())) {
+      result.push(tag.trim());
+      lowerSet.add(tag.trim().toLowerCase());
+    }
+  }
+  return result;
 }
 
 function cleanAssignedTo(value: unknown): string | undefined {

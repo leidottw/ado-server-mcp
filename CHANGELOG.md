@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 `create_iteration` 工具，在指定父路徑下建立 Iteration 節點，支援起訖日期
+- 新增 `update_iteration` 工具，更新既有 Iteration 節點的名稱或起訖日期
+- 新增 `list_iterations` 工具，查詢專案下的 Iteration / Area 樹狀結構（支援 depth 參數）
+- 新增 `assign_team_iteration` 工具，將 Iteration 節點指派給指定 Team
+- 新增 `list_team_iterations` 工具，查詢 Team 已指派的 Iteration 清單（支援 timeframe 篩選）
+- 新增 `add_work_item_tags` 工具，安全附加 Tag 至工作項目（merge 現有 Tag，不覆蓋）
+- 新增 `remove_work_item_tags` 工具，從工作項目精確移除指定 Tag，保留其餘 Tag
+
 ## [0.5.3] - 2026-06-07
 
 ### Fixed
