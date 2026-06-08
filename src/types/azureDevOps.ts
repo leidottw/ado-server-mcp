@@ -772,28 +772,26 @@ export const getPullRequestStatusesOutputSchema = z
 
 // ─── Classification Node (Iteration / Area) Schemas ──────────────────────────
 
-const classificationNodeSchema: z.ZodSchema = z.lazy(() =>
-  z
-    .object({
-      id: z.number(),
-      identifier: z.string(),
-      name: z.string(),
-      structureType: z.string(),
-      hasChildren: z.boolean(),
-      path: z.string(),
-      attributes: z
-        .object({
-          startDate: z.string().optional(),
-          finishDate: z.string().optional(),
-        })
-        .passthrough()
-        .optional(),
-      children: z.array(classificationNodeSchema).optional(),
-      url: z.string(),
-    })
-    .partial()
-    .passthrough(),
-);
+const classificationNodeSchema = z
+  .object({
+    id: z.number(),
+    identifier: z.string(),
+    name: z.string(),
+    structureType: z.string(),
+    hasChildren: z.boolean(),
+    path: z.string(),
+    attributes: z
+      .object({
+        startDate: z.string().optional(),
+        finishDate: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    children: z.array(z.unknown()).optional(),
+    url: z.string(),
+  })
+  .partial()
+  .passthrough();
 
 export const classificationNodeOutputSchema = classificationNodeSchema;
 
