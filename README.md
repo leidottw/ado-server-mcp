@@ -13,6 +13,16 @@
 - `list_work_item_types` - 列出專案中可用的工作項目類型
 - `add_work_item_comment` - 在工作項目上新增評論
 - `get_work_item_comments` - 取得工作項目的評論清單
+- `add_work_item_tags` - 安全附加 Tag 至工作項目（merge 現有 Tag，不覆蓋）
+- `remove_work_item_tags` - 從工作項目精確移除指定 Tag，保留其餘 Tag
+
+### Iteration 管理
+
+- `create_iteration` - 在指定父路徑下建立 Iteration 節點，支援設定起訖日期
+- `update_iteration` - 更新既有 Iteration 節點的名稱或起訖日期
+- `list_iterations` - 查詢專案下的 Iteration / Area 樹狀結構
+- `assign_team_iteration` - 將 Iteration 節點指派給指定 Team
+- `list_team_iterations` - 查詢 Team 已指派的 Iteration 清單（支援 timeframe 篩選）
 
 ### 拉取請求管理
 
@@ -187,7 +197,8 @@ src/
 └── tools/
     ├── projects.ts       # 專案相關工具
     ├── pullRequests.ts   # 拉取請求相關工具
-    └── workItems.ts      # 工作項相關工具
+    ├── workItems.ts      # 工作項相關工具
+    └── iterations.ts     # Iteration 管理工具
 ```
 
 ## License

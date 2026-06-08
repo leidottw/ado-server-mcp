@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-06-08
+
 ### Added
 
 - 新增 `create_iteration` 工具，在指定父路徑下建立 Iteration 節點，支援起訖日期
