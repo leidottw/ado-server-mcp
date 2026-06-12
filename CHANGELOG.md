@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-06-12
+
+### Changed
+
+- `search_wiki` 的 `project` 參數改為 `projectName`，讓命名自描述
+
 ## [0.7.0] - 2026-06-12
 
 ### Added
