@@ -13,6 +13,7 @@
 - `list_work_item_types` - 列出專案中可用的工作項目類型
 - `add_work_item_comment` - 在工作項目上新增評論
 - `get_work_item_comments` - 取得工作項目的評論清單
+- `get_work_item_type_fields` - 取得指定工作項目類型的完整欄位定義（含 referenceName、是否必填、allowedValues、預設值）
 - `add_work_item_tags` - 安全附加 Tag 至工作項目（merge 現有 Tag，不覆蓋）
 - `remove_work_item_tags` - 從工作項目精確移除指定 Tag，保留其餘 Tag
 
@@ -51,6 +52,7 @@
 
 ### 專案管理
 
+- `get_me` - 取得目前 PAT Token 所對應的使用者資訊（顯示名稱、帳號、ID）
 - `list_projects` - 列出 Collection 中可存取的專案清單
 - `get_project` - 取得單一專案的詳細資訊
 - `get_project_teams` - 取得指定專案底下的團隊列表
