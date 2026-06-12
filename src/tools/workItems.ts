@@ -3,6 +3,7 @@ import type * as WorkItemTrackingInterfaces from "azure-devops-node-api/interfac
 import {
   WorkItemExpand,
   CommentSortOrder,
+  WorkItemTypeFieldsExpandLevel,
 } from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
 import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
@@ -14,6 +15,7 @@ import {
   normalizeAzureDevOpsDates,
   createWorkItemOutputSchema,
   getWorkItemCommentsOutputSchema,
+  getWorkItemTypeFieldsOutputSchema,
   queryWorkItemsOutputSchema,
   updateWorkItemOutputSchema,
   workItemOutputSchema,
@@ -41,12 +43,7 @@ export function registerWorkItemTools(
           .optional()
           .describe(
             "要回傳的欄位 referenceName 清單，留空則回傳所有欄位。" +
-              "常用欄位：System.Id, System.Title, System.State, System.AssignedTo, " +
-              "System.WorkItemType, System.Description, System.AreaPath, System.IterationPath, " +
-              "System.Tags, System.CreatedDate, System.CreatedBy, System.ChangedDate, System.ChangedBy, " +
-              "System.CommentCount, Microsoft.VSTS.Common.Priority, Microsoft.VSTS.Common.Severity, " +
-              "Microsoft.VSTS.Common.AcceptanceCriteria, Microsoft.VSTS.Scheduling.StoryPoints, " +
-              "Microsoft.VSTS.Scheduling.RemainingWork, Microsoft.VSTS.Scheduling.CompletedWork",
+              "可呼叫 get_work_item_type_fields 取得該類型的完整欄位清單。",
           ),
         includeLinks: z
           .boolean()
@@ -116,7 +113,10 @@ export function registerWorkItemTools(
         type: z.string().min(1).describe("工作項目類型，例如 Bug 或 Task"),
         fields: z
           .record(z.string(), z.unknown())
-          .describe("欄位名稱與對應值的物件"),
+          .describe(
+            "欄位 referenceName 與對應值的物件，例如 { \"System.Title\": \"Bug 標題\" }。" +
+              "可先呼叫 get_work_item_type_fields 取得該類型的完整欄位清單（含必填、允許值）。",
+          ),
         bypassRules: z.boolean().optional().describe("略過工作項目規則驗證"),
         suppressNotifications: z
           .boolean()
@@ -183,7 +183,10 @@ export function registerWorkItemTools(
         fields: z
           .record(z.string(), z.unknown())
           .optional()
-          .describe("要更新的欄位資料"),
+          .describe(
+            "要更新的欄位 referenceName 與對應值的物件，例如 { \"System.Title\": \"新標題\" }。" +
+              "可先呼叫 get_work_item_type_fields 取得該類型的完整欄位清單（含必填、允許值）。",
+          ),
         addRelations: z
           .array(
             z.object({
@@ -314,12 +317,7 @@ export function registerWorkItemTools(
           .describe(
             "若提供此參數，查詢後會自動批次取得工作項目詳細資料並回傳於 workItemDetails。" +
               "傳入空陣列表示取得所有欄位；傳入欄位清單則只取指定欄位以節省 token。" +
-              "常用欄位：System.Id, System.Title, System.State, System.AssignedTo, " +
-              "System.WorkItemType, System.Description, System.AreaPath, System.IterationPath, " +
-              "System.Tags, System.CreatedDate, System.CreatedBy, System.ChangedDate, System.ChangedBy, " +
-              "System.CommentCount, Microsoft.VSTS.Common.Priority, Microsoft.VSTS.Common.Severity, " +
-              "Microsoft.VSTS.Common.AcceptanceCriteria, Microsoft.VSTS.Scheduling.StoryPoints, " +
-              "Microsoft.VSTS.Scheduling.RemainingWork, Microsoft.VSTS.Scheduling.CompletedWork",
+              "可呼叫 get_work_item_type_fields 取得該類型的完整欄位清單。",
           ),
       },
       outputSchema: queryWorkItemsOutputSchema,
@@ -464,6 +462,43 @@ export function registerWorkItemTools(
             url: t.url ?? undefined,
           })),
         }),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_work_item_type_fields",
+    {
+      description:
+        "取得指定工作項目類型的所有欄位定義，包含 referenceName、是否必填、允許值與預設值。" +
+        "建議在呼叫 create_work_item 或 update_work_item 前先查詢此工具以確認正確的欄位名稱與合法值。",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        type: z.string().min(1).describe("工作項目類型，例如 Bug 或 Task"),
+      },
+      outputSchema: getWorkItemTypeFieldsOutputSchema,
+    },
+    async ({ project, type }: { project: string; type: string }) => {
+      const fields = await witApi.getWorkItemTypeFieldsWithReferences(
+        project,
+        type,
+        WorkItemTypeFieldsExpandLevel.AllowedValues,
+      );
+      return {
+        content: [],
+        structuredContent: {
+          fields: ensureArray(fields).map((f: any) => ({
+            name: f.name ?? undefined,
+            referenceName: f.referenceName ?? undefined,
+            alwaysRequired: f.alwaysRequired ?? undefined,
+            helpText: f.helpText ?? undefined,
+            defaultValue: f.defaultValue ?? undefined,
+            allowedValues:
+              f.allowedValues && f.allowedValues.length > 0
+                ? f.allowedValues
+                : undefined,
+          })),
+        },
       };
     },
   );

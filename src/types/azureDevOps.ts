@@ -575,6 +575,26 @@ export const workItemTypesOutputSchema = z
   .passthrough();
 
 /**
+ * Work item type fields schema.
+ * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
+ * - WorkItemTypeFieldWithReferences
+ */
+const workItemTypeFieldWithReferencesSchema = z
+  .object({
+    name: z.string().optional(),
+    referenceName: z.string().optional(),
+    alwaysRequired: z.boolean().optional(),
+    helpText: z.string().optional(),
+    defaultValue: z.unknown().optional(),
+    allowedValues: z.array(z.unknown()).optional(),
+  })
+  .passthrough();
+
+export const getWorkItemTypeFieldsOutputSchema = z
+  .object({ fields: z.array(workItemTypeFieldWithReferencesSchema) })
+  .passthrough();
+
+/**
  * Work item comment creation schema.
  * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts
  * - WorkItemComment
