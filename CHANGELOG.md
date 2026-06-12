@@ -6,6 +6,32 @@
 
 ## [Unreleased]
 
+## [0.8.0-beta.1] - 2026-06-13
+
+### Added
+
+- Git 工具（新檔案 `src/tools/git.ts`，toolset: `git`）：
+  - `get_pull_request_diff`（P0）：取得 PR 的 unified diff，自動略過二進位檔與超過 1 MB 的檔案並於 skippedFiles 標註
+  - `get_file_content`（P0）：讀取任意分支 / commit / tag 的檔案內容，支援行範圍切割
+  - `list_branches`（P0）：列出儲存庫分支，標示預設分支
+  - `list_commits`（P0）：依分支、路徑、作者、日期範圍篩選 commit 歷程
+  - `get_commit`（P0）：取得單一 commit 詳情與變更檔案清單（不含 diff）
+  - `search_code`（P1）：依關鍵字搜尋程式碼（需 ADO Server 安裝 Search extension）
+- Pipelines 補強：
+  - `get_build_timeline`（P0）：取得 Build 執行時間軸（stage/job/task 成敗），`failedOnly: true` 預設只回傳失敗節點及祖先鏈
+  - `cancel_build`（P1）：取消正在執行的 Build
+- Pull Requests 補強：
+  - `get_pull_request_work_items`（P1）：取得 PR 關聯的工作項目清單（含摘要）
+  - `update_pull_request` 新增完成選項（P1）：`mergeStrategy`、`deleteSourceBranch`、`mergeCommitMessage`（僅 `status: completed` 時有效）
+- Work Items 補強：
+  - `download_work_item_attachment`（P1）：下載附件至暫存檔並回傳路徑
+  - `add_work_item_attachment`（P1）：上傳本機檔案為工作項目附件
+  - `list_queries`（P1）：列出專案共用查詢（樹狀結構）
+  - `run_query`（P1）：執行共用查詢（by queryId），格式與 query_work_items 一致
+  - `get_work_item_revisions`（P1）：取得工作項目欄位變更歷程
+  - `delete_work_item`（P1）：將工作項目軟刪除至資源回收筒
+- 新增 `diff` 套件相依，用於 `get_pull_request_diff` 產生 unified diff
+
 ## [0.7.1] - 2026-06-12
 
 ### Changed

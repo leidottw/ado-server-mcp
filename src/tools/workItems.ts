@@ -9,6 +9,9 @@ import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInter
 import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
+import * as os from "os";
+import * as fs from "fs";
+import * as path from "path";
 import {
   ensureArray,
   ensureRecord,
@@ -21,6 +24,11 @@ import {
   workItemOutputSchema,
   workItemTypesOutputSchema,
   addWorkItemCommentOutputSchema,
+  downloadWorkItemAttachmentOutputSchema,
+  addWorkItemAttachmentOutputSchema,
+  listQueriesOutputSchema,
+  getWorkItemRevisionsOutputSchema,
+  deleteWorkItemOutputSchema,
 } from "../types/azureDevOps.js";
 
 const workItemIdSchema = z.union([
@@ -737,6 +745,437 @@ export function registerWorkItemTools(
           fields: response?.fields ?? {},
           url: response?.url ?? undefined,
         }),
+      };
+    },
+  );
+
+  // ── download_work_item_attachment ──────────────────────────────────────────
+  server.registerTool(
+    "download_work_item_attachment",
+    {
+      description:
+        "下載工作項目附件並儲存至暫存檔，回傳檔案路徑。attachmentId 可從 get_work_item（includeRelations: true）" +
+        "回傳的 relations 中，type 為 AttachedFile 的 url 最後一段 GUID 取得。",
+      inputSchema: {
+        attachmentId: z
+          .string()
+          .min(1)
+          .describe("附件 GUID，自 work item relations 的 AttachedFile url 取得"),
+        fileName: z
+          .string()
+          .optional()
+          .describe("檔案名稱（僅用於暫存檔副檔名，選填）"),
+        project: z.string().optional().describe("專案名稱或 ID"),
+      },
+      outputSchema: downloadWorkItemAttachmentOutputSchema,
+    },
+    async ({
+      attachmentId,
+      fileName,
+      project,
+    }: {
+      attachmentId: string;
+      fileName?: string;
+      project?: string;
+    }) => {
+      const stream = await witApi.getAttachmentContent(
+        attachmentId,
+        fileName,
+        project,
+        true,
+      );
+
+      const tmpDir = path.join(os.tmpdir(), "ado-mcp");
+      fs.mkdirSync(tmpDir, { recursive: true });
+
+      const ext = fileName ? path.extname(fileName) : ".bin";
+      const safeName = (fileName ?? attachmentId).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
+      const outPath = path.join(tmpDir, `attachment-${safeName}-${Date.now()}${ext}`);
+
+      const resolvedPath = path.resolve(outPath);
+      if (!resolvedPath.startsWith(path.resolve(tmpDir))) {
+        throw new Error("無效的輸出路徑");
+      }
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+      }
+      const buf = Buffer.concat(chunks);
+      fs.writeFileSync(resolvedPath, buf);
+
+      return {
+        content: [],
+        structuredContent: {
+          outputFile: { path: resolvedPath, bytes: buf.length },
+        },
+      };
+    },
+  );
+
+  // ── add_work_item_attachment ───────────────────────────────────────────────
+  server.registerTool(
+    "add_work_item_attachment",
+    {
+      description: "上傳本機檔案為工作項目附件，並建立關聯。",
+      inputSchema: {
+        workItemId: z.number().int().positive().describe("工作項目編號"),
+        filePath: z
+          .string()
+          .min(1)
+          .describe("本機檔案的絕對路徑（檔案必須存在）"),
+        project: z.string().optional().describe("專案名稱或 ID"),
+        comment: z.string().optional().describe("附件備註（選填）"),
+      },
+      outputSchema: addWorkItemAttachmentOutputSchema,
+    },
+    async ({
+      workItemId,
+      filePath,
+      project,
+      comment,
+    }: {
+      workItemId: number;
+      filePath: string;
+      project?: string;
+      comment?: string;
+    }) => {
+      const resolvedPath = path.resolve(filePath);
+      if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+        throw new Error(`找不到檔案或不是一般檔案：${filePath}`);
+      }
+      const stats = fs.statSync(resolvedPath);
+      const MAX_BYTES = 60 * 1024 * 1024;
+      if (stats.size > MAX_BYTES) {
+        throw new Error(`檔案超過 60 MB 上限（${stats.size} bytes），無法上傳。`);
+      }
+
+      const baseName = path.basename(resolvedPath);
+      const fileStream = fs.createReadStream(resolvedPath);
+      const attachRef = await witApi.createAttachment(
+        undefined,
+        fileStream,
+        baseName,
+        undefined,
+        project,
+      );
+
+      if (!attachRef?.url) {
+        throw new Error("附件上傳失敗：API 未回傳 url");
+      }
+
+      const operations: VSSInterfaces.JsonPatchOperation[] = [
+        {
+          op: VSSInterfaces.Operation.Add,
+          path: "/relations/-",
+          value: {
+            rel: "AttachedFile",
+            url: attachRef.url,
+            attributes: { comment: comment ?? "" },
+          },
+        },
+      ];
+      await witApi.updateWorkItem(undefined, operations, workItemId, undefined, undefined, undefined, undefined);
+
+      return {
+        content: [],
+        structuredContent: {
+          workItemId,
+          attachmentUrl: attachRef.url,
+          fileName: baseName,
+        },
+      };
+    },
+  );
+
+  // ── list_queries ───────────────────────────────────────────────────────────
+  server.registerTool(
+    "list_queries",
+    {
+      description: "列出專案的共用查詢資料夾與查詢（樹狀結構），可用於取得 queryId 後呼叫 run_query。",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        depth: z
+          .number()
+          .int()
+          .min(1)
+          .max(5)
+          .optional()
+          .describe("遞迴深度，預設 2"),
+        folderPath: z
+          .string()
+          .optional()
+          .describe("從指定資料夾路徑開始列出（選填）"),
+      },
+      outputSchema: listQueriesOutputSchema,
+    },
+    async ({
+      project,
+      depth = 2,
+      folderPath,
+    }: {
+      project: string;
+      depth?: number;
+      folderPath?: string;
+    }) => {
+      let items: WorkItemTrackingInterfaces.QueryHierarchyItem[];
+      if (folderPath) {
+        const single = await witApi.getQuery(project, folderPath, undefined, depth);
+        items = single ? [single] : [];
+      } else {
+        items = await witApi.getQueries(project, undefined, depth);
+      }
+
+      function mapQueryItem(
+        q: WorkItemTrackingInterfaces.QueryHierarchyItem,
+      ): Record<string, unknown> {
+        return {
+          id: q.id ?? undefined,
+          name: q.name ?? undefined,
+          path: q.path ?? undefined,
+          isFolder: q.isFolder ?? undefined,
+          hasChildren: q.hasChildren ?? undefined,
+          children: q.children
+            ? q.children.map(mapQueryItem)
+            : undefined,
+        };
+      }
+
+      return {
+        content: [],
+        structuredContent: {
+          queries: ensureArray<WorkItemTrackingInterfaces.QueryHierarchyItem>(
+            items,
+          ).map(mapQueryItem),
+        },
+      };
+    },
+  );
+
+  // ── run_query ──────────────────────────────────────────────────────────────
+  server.registerTool(
+    "run_query",
+    {
+      description:
+        "執行團隊已存好的共用查詢（by queryId），結果格式與 query_work_items 完全一致，" +
+        "可搭配 fetchFields 批次取得工作項目詳細資料。",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        queryId: z
+          .string()
+          .min(1)
+          .describe("查詢 ID（GUID），可由 list_queries 取得"),
+        top: z.number().int().positive().optional().describe("最多回傳筆數"),
+        fetchFields: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "提供時自動批次取得工作項目詳細資料並回傳於 workItemDetails。" +
+              "傳入空陣列表示取得所有欄位；傳入欄位清單則只取指定欄位。",
+          ),
+      },
+      outputSchema: queryWorkItemsOutputSchema,
+    },
+    async ({
+      project,
+      queryId,
+      top,
+      fetchFields,
+    }: {
+      project: string;
+      queryId: string;
+      top?: number;
+      fetchFields?: string[];
+    }) => {
+      const teamContext: CoreInterfaces.TeamContext = { project };
+      const wiqlResult = await witApi.queryById(queryId, teamContext, undefined, top);
+
+      const workItems = ensureArray<{ id?: number; url?: string }>(
+        wiqlResult.workItems,
+      );
+      const columns = ensureArray<{
+        referenceName?: string;
+        name?: string;
+        url?: string;
+      }>(wiqlResult.columns);
+      const workItemRelations = ensureArray<{
+        rel?: string;
+        source?: { id?: number; url?: string };
+        target?: { id?: number; url?: string };
+      }>(wiqlResult.workItemRelations);
+
+      let workItemDetails:
+        | Array<{ id?: number; rev?: number; fields?: Record<string, unknown>; url?: string }>
+        | undefined;
+
+      if (fetchFields !== undefined && workItems.length > 0) {
+        const ids = workItems
+          .map((item) => item.id)
+          .filter((id): id is number => id !== undefined);
+        const fieldsParam = fetchFields.length > 0 ? fetchFields : undefined;
+        const chunkSize = 200;
+        const fetched: Array<{ id?: number; rev?: number; fields?: Record<string, unknown>; url?: string }> = [];
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          const chunk = ids.slice(i, i + chunkSize);
+          const items = await witApi.getWorkItems(chunk, fieldsParam, undefined, undefined, undefined, project);
+          for (const item of ensureArray(items)) {
+            const wi = item as { id?: number; rev?: number; fields?: Record<string, unknown>; url?: string };
+            fetched.push({
+              id: wi.id ?? undefined,
+              rev: wi.rev ?? undefined,
+              fields: wi.fields ?? {},
+              url: wi.url ?? undefined,
+            });
+          }
+        }
+        workItemDetails = fetched;
+      }
+
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          asOf: wiqlResult.asOf ?? undefined,
+          columns: columns.map((column) => ({
+            referenceName: column.referenceName ?? undefined,
+            name: column.name ?? undefined,
+            url: column.url ?? undefined,
+          })),
+          query: queryId,
+          queryResultType: wiqlResult.queryResultType ?? undefined,
+          queryType: wiqlResult.queryType ?? undefined,
+          workItems: workItems.map((item) => ({
+            id: item.id ?? undefined,
+            url: item.url ?? undefined,
+          })),
+          workItemRelations: workItemRelations.map((rel) => ({
+            rel: rel.rel ?? undefined,
+            source: rel.source ? { id: rel.source.id ?? undefined, url: rel.source.url ?? undefined } : undefined,
+            target: rel.target ? { id: rel.target.id ?? undefined, url: rel.target.url ?? undefined } : undefined,
+          })),
+          workItemDetails,
+        }),
+      };
+    },
+  );
+
+  // ── get_work_item_revisions ────────────────────────────────────────────────
+  server.registerTool(
+    "get_work_item_revisions",
+    {
+      description:
+        "取得工作項目的欄位變更歷程（誰在什麼時候改了哪些欄位）。" +
+        "提供 fields 時只回傳包含指定欄位變化的 revision，可大幅減少雜訊。",
+      inputSchema: {
+        id: z.number().int().positive().describe("工作項目編號"),
+        project: z.string().optional().describe("專案名稱或 ID"),
+        top: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("最多回傳幾筆更新記錄，預設 10"),
+        skip: z.number().int().min(0).optional().describe("跳過筆數（分頁用）"),
+        fields: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "只追蹤這些欄位的變化（referenceName），提供時過濾掉沒有指定欄位變化的 revision",
+          ),
+      },
+      outputSchema: getWorkItemRevisionsOutputSchema,
+    },
+    async ({
+      id,
+      project,
+      top = 10,
+      skip,
+      fields,
+    }: {
+      id: number;
+      project?: string;
+      top?: number;
+      skip?: number;
+      fields?: string[];
+    }) => {
+      const updates = await witApi.getUpdates(id, top, skip, project);
+      const updateList =
+        ensureArray<WorkItemTrackingInterfaces.WorkItemUpdate>(updates);
+
+      const fieldSet = fields && fields.length > 0 ? new Set(fields) : undefined;
+
+      const revisions = updateList
+        .map((u) => {
+          const changedFields: Record<
+            string,
+            { oldValue: unknown; newValue: unknown }
+          > = {};
+
+          if (u.fields) {
+            for (const [key, update] of Object.entries(u.fields)) {
+              if (fieldSet && !fieldSet.has(key)) continue;
+              const fu = update as WorkItemTrackingInterfaces.WorkItemFieldUpdate;
+              const oldVal = fu.oldValue;
+              const newVal = fu.newValue;
+              changedFields[key] = {
+                oldValue:
+                  typeof oldVal === "string" && oldVal.length > 200
+                    ? oldVal.slice(0, 200) + "…"
+                    : oldVal,
+                newValue:
+                  typeof newVal === "string" && newVal.length > 200
+                    ? newVal.slice(0, 200) + "…"
+                    : newVal,
+              };
+            }
+          }
+
+          if (fieldSet && Object.keys(changedFields).length === 0) return null;
+
+          return {
+            rev: u.rev ?? undefined,
+            revisedBy: u.revisedBy
+              ? {
+                  displayName:
+                    (u.revisedBy as unknown as { displayName?: string }).displayName ?? undefined,
+                  uniqueName:
+                    (u.revisedBy as unknown as { uniqueName?: string }).uniqueName ?? undefined,
+                }
+              : undefined,
+            revisedDate: u.revisedDate ?? undefined,
+            changedFields:
+              Object.keys(changedFields).length > 0 ? changedFields : undefined,
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({ revisions }),
+      };
+    },
+  );
+
+  // ── delete_work_item ───────────────────────────────────────────────────────
+  server.registerTool(
+    "delete_work_item",
+    {
+      description:
+        "將工作項目軟刪除（移至資源回收筒），可由 ADO 入口網站還原。不提供永久刪除（destroy）功能。",
+      inputSchema: {
+        id: z.number().int().positive().describe("工作項目編號"),
+        project: z.string().optional().describe("專案名稱或 ID"),
+      },
+      outputSchema: deleteWorkItemOutputSchema,
+    },
+    async ({ id, project }: { id: number; project?: string }) => {
+      const result = await witApi.deleteWorkItem(id, project);
+      return {
+        content: [],
+        structuredContent: {
+          id: result?.id ?? id,
+          deletedDate: result?.deletedDate ?? undefined,
+          message: "已移至資源回收筒，可由入口網站還原",
+        },
       };
     },
   );

@@ -1,5 +1,7 @@
 import type { IGitApi } from "azure-devops-node-api/GitApi";
+import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
 import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
+import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
 import {
@@ -11,6 +13,7 @@ import {
   getPullRequestChangesOutputSchema,
   getPullRequestThreadsOutputSchema,
   getPullRequestStatusesOutputSchema,
+  getPullRequestWorkItemsOutputSchema,
   pullRequestDetailOutputSchema,
   pullRequestSummaryOutputSchema,
   pullRequestThreadOutputSchema,
@@ -40,6 +43,7 @@ function parseGitPullRequestStatus(
 export function registerPullRequestTools(
   server: McpServer,
   gitApi: IGitApi,
+  witApi?: IWorkItemTrackingApi,
 ): void {
   server.registerTool(
     "get_repositories",
@@ -372,7 +376,10 @@ export function registerPullRequestTools(
   server.registerTool(
     "update_pull_request",
     {
-      description: "更新拉取請求（標題、說明、狀態、草稿模式）",
+      description:
+        "更新拉取請求（標題、說明、狀態、草稿模式）。" +
+        "設定 status: \"completed\" 時可搭配 mergeStrategy、deleteSourceBranch、mergeCommitMessage 控制合併行為；" +
+        "其他狀態下這些參數會被忽略並於回傳訊息中說明。",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID 或名稱"),
         pullRequestId: z.number().int().positive().describe("拉取請求編號"),
@@ -383,6 +390,18 @@ export function registerPullRequestTools(
           .optional()
           .describe("更新狀態"),
         isDraft: z.boolean().optional().describe("切換草稿模式"),
+        mergeStrategy: z
+          .enum(["noFastForward", "squash", "rebase", "rebaseMerge"])
+          .optional()
+          .describe("合併策略（僅 status: completed 時有效）"),
+        deleteSourceBranch: z
+          .boolean()
+          .optional()
+          .describe("完成後刪除來源分支（僅 status: completed 時有效）"),
+        mergeCommitMessage: z
+          .string()
+          .optional()
+          .describe("合併 commit 訊息（僅 status: completed 時有效）"),
       },
       outputSchema: updatePullRequestOutputSchema,
     },
@@ -393,6 +412,9 @@ export function registerPullRequestTools(
       description,
       status,
       isDraft,
+      mergeStrategy,
+      deleteSourceBranch,
+      mergeCommitMessage,
     }: {
       repositoryId: string;
       pullRequestId: number;
@@ -400,12 +422,30 @@ export function registerPullRequestTools(
       description?: string;
       status?: "active" | "abandoned" | "completed";
       isDraft?: boolean;
+      mergeStrategy?: "noFastForward" | "squash" | "rebase" | "rebaseMerge";
+      deleteSourceBranch?: boolean;
+      mergeCommitMessage?: string;
     }) => {
       const body: Partial<GitInterfaces.GitPullRequest> = {};
       if (title !== undefined) body.title = title;
       if (description !== undefined) body.description = description;
       if (status !== undefined) body.status = parseGitPullRequestStatus(status);
       if (isDraft !== undefined) body.isDraft = isDraft;
+
+      if (status === "completed") {
+        const pr = await gitApi.getPullRequest(repositoryId, pullRequestId, undefined);
+        if (pr?.lastMergeSourceCommit) {
+          body.lastMergeSourceCommit = pr.lastMergeSourceCommit;
+        }
+        const completionOptions: Record<string, unknown> = {};
+        if (mergeStrategy !== undefined) completionOptions.mergeStrategy = mergeStrategy;
+        if (deleteSourceBranch !== undefined) completionOptions.deleteSourceBranch = deleteSourceBranch;
+        if (mergeCommitMessage !== undefined) completionOptions.mergeCommitMessage = mergeCommitMessage;
+        if (Object.keys(completionOptions).length > 0) {
+          body.completionOptions = completionOptions as GitInterfaces.GitPullRequestCompletionOptions;
+        }
+      }
+
       const response = await gitApi.updatePullRequest(
         body as GitInterfaces.GitPullRequest,
         repositoryId,
@@ -419,6 +459,10 @@ export function registerPullRequestTools(
           title: response?.title ?? undefined,
           status: response?.status ?? undefined,
           url: response?.url ?? undefined,
+          note:
+            status !== "completed" && (mergeStrategy !== undefined || deleteSourceBranch !== undefined || mergeCommitMessage !== undefined)
+              ? "mergeStrategy、deleteSourceBranch、mergeCommitMessage 僅在 status: completed 時有效，本次已忽略。"
+              : undefined,
         },
       };
     },
@@ -728,6 +772,77 @@ export function registerPullRequestTools(
         structuredContent: normalizeAzureDevOpsDates({
           statuses: ensureArray<GitInterfaces.GitPullRequestStatus>(statuses),
         }),
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_pull_request_work_items",
+    {
+      description:
+        "取得拉取請求關聯的工作項目清單（含摘要資訊）。" +
+        "若需反向建立工作項目 → PR 的關聯，請在 update_work_item 的 addRelations 中使用：" +
+        "rel: \"ArtifactLink\"，url: \"vstfs:///Git/PullRequestId/{projectId}%2F{repositoryId}%2F{pullRequestId}\"，attributes: { name: \"Pull Request\" }。",
+      inputSchema: {
+        repositoryId: z.string().min(1).describe("儲存庫 ID"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
+        project: z.string().optional().describe("專案名稱或 ID"),
+      },
+      outputSchema: getPullRequestWorkItemsOutputSchema,
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+      project,
+    }: {
+      repositoryId: string;
+      pullRequestId: number;
+      project?: string;
+    }) => {
+      const wiRefs = await gitApi.getPullRequestWorkItemRefs(
+        repositoryId,
+        pullRequestId,
+        project,
+      );
+      const refs = ensureArray<VSSInterfaces.ResourceRef>(wiRefs);
+      const ids = refs
+        .map((r) => {
+          const idStr = r.id ?? "";
+          const n = parseInt(idStr, 10);
+          return isNaN(n) ? undefined : n;
+        })
+        .filter((n): n is number => n !== undefined);
+
+      if (ids.length === 0) {
+        return { content: [], structuredContent: { workItems: [] } };
+      }
+
+      const fields = [
+        "System.Id",
+        "System.Title",
+        "System.State",
+        "System.WorkItemType",
+      ];
+      const items = witApi
+        ? await witApi.getWorkItems(ids, fields, undefined, undefined, undefined, project)
+        : [];
+
+      return {
+        content: [],
+        structuredContent: {
+          workItems: ensureArray(items).map((item) => {
+            const wi = item as {
+              id?: number;
+              fields?: Record<string, unknown>;
+            };
+            return {
+              id: wi.id ?? undefined,
+              title: wi.fields?.["System.Title"] as string | undefined,
+              state: wi.fields?.["System.State"] as string | undefined,
+              type: wi.fields?.["System.WorkItemType"] as string | undefined,
+            };
+          }),
+        },
       };
     },
   );

@@ -955,6 +955,244 @@ export const getMeOutputSchema = z
   })
   .passthrough();
 
+// ─── Git Tools Schemas ────────────────────────────────────────────────────────
+
+const skippedFileSchema = z
+  .object({
+    path: z.string(),
+    reason: z.string(),
+  })
+  .passthrough();
+
+export const getPullRequestDiffOutputSchema = z
+  .object({
+    diff: z.string().optional(),
+    fileCount: z.number(),
+    skippedFiles: z.array(skippedFileSchema),
+  })
+  .passthrough();
+
+export const getFileContentOutputSchema = z
+  .object({
+    content: z.string().optional(),
+    totalLines: z.number(),
+    returnedRange: z
+      .object({ start: z.number(), end: z.number() })
+      .optional(),
+  })
+  .passthrough();
+
+const branchItemSchema = z
+  .object({
+    name: z.string().optional(),
+    objectId: z.string().optional(),
+    creator: z
+      .object({ displayName: z.string().optional(), uniqueName: z.string().optional() })
+      .optional(),
+    isDefault: z.boolean().optional(),
+  })
+  .passthrough();
+
+export const listBranchesOutputSchema = z
+  .object({ branches: z.array(branchItemSchema) })
+  .passthrough();
+
+const commitItemSchema = z
+  .object({
+    commitId: z.string().optional(),
+    comment: z.string().optional(),
+    author: z
+      .object({
+        name: z.string().optional(),
+        email: z.string().optional(),
+        date: z.string().optional(),
+      })
+      .optional(),
+    changeCounts: z.record(z.string(), z.number()).optional(),
+  })
+  .passthrough();
+
+export const listCommitsOutputSchema = z
+  .object({ commits: z.array(commitItemSchema) })
+  .passthrough();
+
+const commitChangeItemSchema = z
+  .object({
+    path: z.string().optional(),
+    changeType: z.unknown().optional(),
+  })
+  .passthrough();
+
+export const getCommitOutputSchema = z
+  .object({
+    commitId: z.string().optional(),
+    comment: z.string().optional(),
+    author: z
+      .object({
+        name: z.string().optional(),
+        email: z.string().optional(),
+        date: z.string().optional(),
+      })
+      .optional(),
+    committer: z
+      .object({
+        name: z.string().optional(),
+        email: z.string().optional(),
+        date: z.string().optional(),
+      })
+      .optional(),
+    url: z.string().optional(),
+    changes: z.array(commitChangeItemSchema).optional(),
+  })
+  .passthrough();
+
+export const searchCodeOutputSchema = z
+  .object({
+    count: z.number().optional(),
+    results: z.array(
+      z
+        .object({
+          fileName: z.string().optional(),
+          path: z.string().optional(),
+          repository: z.string().optional(),
+          project: z.string().optional(),
+          matches: z
+            .array(z.object({ line: z.number().optional() }).passthrough())
+            .optional(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+// ─── Build Timeline Schema ────────────────────────────────────────────────────
+
+const timelineRecordSchema = z
+  .object({
+    id: z.string().optional(),
+    parentId: z.string().optional(),
+    type: z.string().optional(),
+    name: z.string().optional(),
+    state: z.number().optional(),
+    result: z.number().optional(),
+    startTime: z.string().optional(),
+    finishTime: z.string().optional(),
+    logId: z.number().optional(),
+    errorIssues: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+export const getBuildTimelineOutputSchema = z
+  .object({
+    records: z.array(timelineRecordSchema),
+    totalRecords: z.number(),
+  })
+  .passthrough();
+
+export const cancelBuildOutputSchema = z
+  .object({
+    id: z.number().optional(),
+    status: z.number().optional(),
+  })
+  .passthrough();
+
+// ─── PR Work Items Schema ─────────────────────────────────────────────────────
+
+export const getPullRequestWorkItemsOutputSchema = z
+  .object({
+    workItems: z.array(
+      z
+        .object({
+          id: z.number().optional(),
+          title: z.string().optional(),
+          state: z.string().optional(),
+          type: z.string().optional(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+// ─── Work Item Attachment Schemas ─────────────────────────────────────────────
+
+export const downloadWorkItemAttachmentOutputSchema = z
+  .object({
+    outputFile: z
+      .object({
+        path: z.string(),
+        bytes: z.number(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+export const addWorkItemAttachmentOutputSchema = z
+  .object({
+    workItemId: z.number().optional(),
+    attachmentUrl: z.string().optional(),
+    fileName: z.string().optional(),
+  })
+  .passthrough();
+
+// ─── Query Schemas ─────────────────────────────────────────────────────────────
+
+const queryItemSchema: z.ZodTypeAny = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().optional(),
+    path: z.string().optional(),
+    isFolder: z.boolean().optional(),
+    hasChildren: z.boolean().optional(),
+    children: z.array(z.lazy(() => queryItemSchema)).optional(),
+  })
+  .passthrough();
+
+export const listQueriesOutputSchema = z
+  .object({ queries: z.array(queryItemSchema) })
+  .passthrough();
+
+// run_query 沿用 queryWorkItemsOutputSchema
+
+// ─── Work Item Revisions Schema ───────────────────────────────────────────────
+
+export const getWorkItemRevisionsOutputSchema = z
+  .object({
+    revisions: z.array(
+      z
+        .object({
+          rev: z.number().optional(),
+          revisedBy: z
+            .object({
+              displayName: z.string().optional(),
+              uniqueName: z.string().optional(),
+            })
+            .optional(),
+          revisedDate: z.string().optional(),
+          changedFields: z
+            .record(
+              z.string(),
+              z.object({
+                oldValue: z.unknown().optional(),
+                newValue: z.unknown().optional(),
+              }),
+            )
+            .optional(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+// ─── Delete Work Item Schema ──────────────────────────────────────────────────
+
+export const deleteWorkItemOutputSchema = z
+  .object({
+    id: z.number().optional(),
+    deletedDate: z.string().optional(),
+    message: z.string(),
+  })
+  .passthrough();
+
 export function normalizeAzureDevOpsDates<T>(value: T): T {
   if (value instanceof Date) {
     return value.toISOString() as unknown as T;

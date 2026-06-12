@@ -7,6 +7,8 @@ import {
   ensureArray,
   normalizeAzureDevOpsDates,
   getBuildLogsOutputSchema,
+  getBuildTimelineOutputSchema,
+  cancelBuildOutputSchema,
   getPipelineDefinitionOutputSchema,
   getPipelineDefinitionYamlOutputSchema,
   listPipelinesOutputSchema,
@@ -385,6 +387,120 @@ export function registerPipelineTools(
             lastChangedOn: l.lastChangedOn ?? undefined,
           })),
         }),
+      };
+    },
+  );
+  server.registerTool(
+    "get_build_timeline",
+    {
+      description:
+        "取得 Build 的結構化執行時間軸（stage/job/task 的成敗與時間），用於快速定位 CI 失敗點，" +
+        "比逐一閱讀 log 節省大量 token。找到失敗 task 後，以其 logId 呼叫 get_build_logs 並善用 grep 參數。",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        buildId: z.number().int().positive().describe("Build（執行）ID"),
+        failedOnly: z
+          .boolean()
+          .optional()
+          .describe(
+            "只回傳 result 為 failed/canceled 的節點及其祖先鏈，預設 true。設為 false 回傳完整記錄。",
+          ),
+      },
+      outputSchema: getBuildTimelineOutputSchema,
+    },
+    async ({
+      project,
+      buildId,
+      failedOnly = true,
+    }: {
+      project: string;
+      buildId: number;
+      failedOnly?: boolean;
+    }) => {
+      const timeline = await buildApi.getBuildTimeline(project, buildId);
+      const allRecords = ensureArray<BuildInterfaces.TimelineRecord>(
+        timeline?.records,
+      );
+
+      const mapped = allRecords.map((r) => ({
+        id: r.id ?? undefined,
+        parentId: r.parentId ?? undefined,
+        type: r.type ?? undefined,
+        name: r.name ?? undefined,
+        state: r.state ?? undefined,
+        result: r.result ?? undefined,
+        startTime: r.startTime ?? undefined,
+        finishTime: r.finishTime ?? undefined,
+        logId: r.log?.id ?? undefined,
+        errorIssues: ensureArray<BuildInterfaces.Issue>(r.issues)
+          .filter((i) => i.type === BuildInterfaces.IssueType.Error)
+          .map((i) => {
+            const msg = i.message ?? "";
+            return msg.length > 500 ? msg.slice(0, 500) + "…" : msg;
+          }),
+      }));
+
+      let records = mapped;
+      if (failedOnly) {
+        // TaskResult: 0=Succeeded, 1=SucceededWithIssues, 2=Failed, 3=Canceled, 4=Skipped, 5=Abandoned
+        const failedIds = new Set(
+          mapped
+            .filter(
+              (r) =>
+                r.result === BuildInterfaces.TaskResult.Failed ||
+                r.result === BuildInterfaces.TaskResult.Canceled ||
+                r.result === BuildInterfaces.TaskResult.Abandoned,
+            )
+            .map((r) => r.id),
+        );
+
+        if (failedIds.size > 0) {
+          // 收集祖先鏈
+          const idToRecord = new Map(mapped.map((r) => [r.id, r]));
+          const includedIds = new Set<string | undefined>(failedIds);
+          for (const id of failedIds) {
+            let current = idToRecord.get(id);
+            while (current?.parentId) {
+              includedIds.add(current.parentId);
+              current = idToRecord.get(current.parentId);
+            }
+          }
+          records = mapped.filter((r) => includedIds.has(r.id));
+        }
+      }
+
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates({
+          records,
+          totalRecords: allRecords.length,
+        }),
+      };
+    },
+  );
+
+  server.registerTool(
+    "cancel_build",
+    {
+      description: "取消正在執行的 Build（Pipeline Run）。",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        buildId: z.number().int().positive().describe("Build（執行）ID"),
+      },
+      outputSchema: cancelBuildOutputSchema,
+    },
+    async ({ project, buildId }: { project: string; buildId: number }) => {
+      const updated = await buildApi.updateBuild(
+        { status: BuildInterfaces.BuildStatus.Cancelling },
+        project,
+        buildId,
+      );
+      return {
+        content: [],
+        structuredContent: {
+          id: updated?.id ?? undefined,
+          status: updated?.status ?? undefined,
+        },
       };
     },
   );
