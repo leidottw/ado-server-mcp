@@ -855,6 +855,96 @@ export function ensureRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+// ─── Wiki Schemas ─────────────────────────────────────────────────────────────
+
+const wikiV2Schema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.number(),
+    projectId: z.string(),
+    repositoryId: z.string(),
+    mappedPath: z.string(),
+    remoteUrl: z.string(),
+    url: z.string(),
+    isDisabled: z.boolean(),
+    versions: z.array(z.object({ version: z.string() }).passthrough()).optional(),
+    properties: z.record(z.string(), z.string()).optional(),
+  })
+  .partial()
+  .passthrough();
+
+const wikiPageSchema: z.ZodTypeAny = z
+  .object({
+    id: z.number(),
+    path: z.string(),
+    content: z.string(),
+    gitItemPath: z.string(),
+    order: z.number(),
+    isParentPage: z.boolean(),
+    isNonConformant: z.boolean(),
+    remoteUrl: z.string(),
+    url: z.string(),
+    subPages: z.array(z.lazy(() => wikiPageSchema)).optional(),
+  })
+  .partial()
+  .passthrough();
+
+const wikiSearchResultSchema = z
+  .object({
+    fileName: z.string(),
+    path: z.string(),
+    wiki: z
+      .object({
+        id: z.string(),
+        name: z.string(),
+        mappedPath: z.string(),
+      })
+      .partial()
+      .passthrough()
+      .optional(),
+    project: z
+      .object({
+        id: z.string(),
+        name: z.string(),
+      })
+      .partial()
+      .passthrough()
+      .optional(),
+    hits: z
+      .array(
+        z
+          .object({
+            fieldReferenceName: z.string(),
+            highlights: z.array(z.string()),
+          })
+          .partial()
+          .passthrough(),
+      )
+      .optional(),
+  })
+  .partial()
+  .passthrough();
+
+export const getWikisOutputSchema = z
+  .object({ wikis: z.array(wikiV2Schema) })
+  .passthrough();
+
+export const getWikiPageOutputSchema = wikiPageSchema;
+
+export const listWikiPagesOutputSchema = wikiPageSchema;
+
+export const createWikiPageOutputSchema = wikiPageSchema;
+
+export const updateWikiPageOutputSchema = wikiPageSchema;
+
+export const searchWikiOutputSchema = z
+  .object({
+    count: z.number().optional(),
+    results: z.array(wikiSearchResultSchema),
+  })
+  .passthrough();
+
 export function normalizeAzureDevOpsDates<T>(value: T): T {
   if (value instanceof Date) {
     return value.toISOString() as unknown as T;

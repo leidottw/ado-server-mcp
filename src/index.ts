@@ -7,6 +7,7 @@ import { registerIterationTools } from "./tools/iterations.js";
 import { registerPipelineTools } from "./tools/pipelines.js";
 import { registerProjectTools } from "./tools/projects.js";
 import { registerPullRequestTools } from "./tools/pullRequests.js";
+import { registerWikiTools } from "./tools/wiki.js";
 import { registerWorkItemTools } from "./tools/workItems.js";
 import { version } from "../package.json";
 
@@ -22,6 +23,7 @@ async function main(): Promise<void> {
   registerPullRequestTools(mcpServer, client.git);
   registerProjectTools(mcpServer, client.core);
   registerPipelineTools(mcpServer, client.build, client.git);
+  registerWikiTools(mcpServer, client.wiki);
 
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);

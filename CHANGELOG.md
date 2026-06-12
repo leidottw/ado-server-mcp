@@ -10,6 +10,13 @@
 
 - 新增 `get_work_item_type_fields` 工具，取得指定工作項目類型的完整欄位定義（含 referenceName、是否必填、allowedValues、預設值）
 - 對 `list_projects`、`get_project`、`get_project_teams`、`get_team`、`get_team_members`、`list_iterations`、`list_team_iterations`、`list_pipelines`、`get_pipeline_definition`、`get_pipeline_definition_yaml`、`get_repositories`、`list_work_item_types`、`get_work_item_type_fields` 等回傳不易變動資料的工具加入勿重複呼叫提示，避免在同一對話中重複消耗 context window
+- 新增 Wiki 相關工具（對應 tiberriver256-azure-devops-mcp 的 wiki 功能）：
+  - `get_wikis`：列出 Collection 或指定專案下所有 Wiki
+  - `get_wiki_page`：取得指定頁面內容與中繼資料
+  - `list_wiki_pages`：取得 Wiki 頁面樹狀結構（支援 recursionLevel）
+  - `create_wiki_page`：建立新頁面或子頁面（CodeWiki 須指定 branch）
+  - `update_wiki_page`：更新現有頁面內容（自動取得 ETag，無需手動傳入）
+  - `search_wiki`：依關鍵字全文搜尋 Wiki 頁面（project 參數限定填名稱，不支援 ID）
 
 ## [0.5.4] - 2026-06-08
 
