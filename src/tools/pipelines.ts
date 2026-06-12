@@ -23,7 +23,7 @@ export function registerPipelineTools(
   server.registerTool(
     "list_pipelines",
     {
-      description: "列出專案中的 CI/CD Pipeline 定義（Build Definitions）",
+      description: "列出專案中的 CI/CD Pipeline 定義（Build Definitions）。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         name: z
@@ -225,7 +225,7 @@ export function registerPipelineTools(
     "get_pipeline_definition",
     {
       description:
-        "取得單一 Pipeline 定義的詳細資訊，包含 repository、變數與觸發設定",
+        "取得單一 Pipeline 定義的詳細資訊，包含 repository、變數與觸發設定。若本次對話中已呼叫過此工具取得相同 project + definitionId 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         definitionId: z.number().int().positive().describe("Pipeline 定義 ID"),
@@ -276,7 +276,7 @@ export function registerPipelineTools(
   server.registerTool(
     "get_pipeline_definition_yaml",
     {
-      description: "取得 Pipeline 定義的完整 YAML 內容",
+      description: "取得 Pipeline 定義的完整 YAML 內容。若本次對話中已呼叫過此工具取得相同 project + definitionId 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         definitionId: z.number().int().positive().describe("Pipeline 定義 ID"),

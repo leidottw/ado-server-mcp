@@ -171,7 +171,7 @@ export function registerIterationTools(
     "list_iterations",
     {
       description:
-        "查詢專案下的 Iteration 或 Area 樹狀結構，可指定展開層數。",
+        "查詢專案下的 Iteration 或 Area 樹狀結構，可指定展開層數。若本次對話中已呼叫過此工具取得相同 project + type 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         type: z
@@ -271,7 +271,7 @@ export function registerIterationTools(
   server.registerTool(
     "list_team_iterations",
     {
-      description: "查詢 Team 目前已指派的 Iteration 清單，含 ID、名稱、日期與時間框架。",
+      description: "查詢 Team 目前已指派的 Iteration 清單，含 ID、名稱、日期與時間框架。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         team: z.string().min(1).describe("Team 名稱或 ID"),

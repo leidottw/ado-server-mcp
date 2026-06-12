@@ -44,7 +44,7 @@ export function registerPullRequestTools(
   server.registerTool(
     "get_repositories",
     {
-      description: "列出指定專案內的 Git 儲存庫",
+      description: "列出指定專案內的 Git 儲存庫。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
       },

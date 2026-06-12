@@ -445,7 +445,7 @@ export function registerWorkItemTools(
   server.registerTool(
     "list_work_item_types",
     {
-      description: "列出專案中可用的工作項目類型",
+      description: "列出專案中可用的工作項目類型。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
       },
@@ -471,7 +471,8 @@ export function registerWorkItemTools(
     {
       description:
         "取得指定工作項目類型的所有欄位定義，包含 referenceName、是否必填、允許值與預設值。" +
-        "建議在呼叫 create_work_item 或 update_work_item 前先查詢此工具以確認正確的欄位名稱與合法值。",
+        "建議在呼叫 create_work_item 或 update_work_item 前先查詢此工具以確認正確的欄位名稱與合法值。" +
+        "若本次對話中已呼叫過此工具取得相同 project + type 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         type: z.string().min(1).describe("工作項目類型，例如 Bug 或 Task"),

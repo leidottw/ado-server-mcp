@@ -9,6 +9,7 @@
 ### Added
 
 - 新增 `get_work_item_type_fields` 工具，取得指定工作項目類型的完整欄位定義（含 referenceName、是否必填、allowedValues、預設值）
+- 對 `list_projects`、`get_project`、`get_project_teams`、`get_team`、`get_team_members`、`list_iterations`、`list_team_iterations`、`list_pipelines`、`get_pipeline_definition`、`get_pipeline_definition_yaml`、`get_repositories`、`list_work_item_types`、`get_work_item_type_fields` 等回傳不易變動資料的工具加入勿重複呼叫提示，避免在同一對話中重複消耗 context window
 
 ## [0.5.4] - 2026-06-08
 

@@ -18,7 +18,7 @@ export function registerProjectTools(
   server.registerTool(
     "list_projects",
     {
-      description: "列出 Collection 中可存取的專案清單",
+      description: "列出 Collection 中可存取的專案清單。若本次對話中已呼叫過此工具，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         stateFilter: z
           .enum([
@@ -75,7 +75,7 @@ export function registerProjectTools(
   server.registerTool(
     "get_project_teams",
     {
-      description: "取得指定專案底下的團隊列表",
+      description: "取得指定專案底下的團隊列表。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         mine: z.boolean().optional().describe("僅回傳我所屬的團隊"),
@@ -120,7 +120,7 @@ export function registerProjectTools(
   server.registerTool(
     "get_team_members",
     {
-      description: "取得特定團隊的成員列表",
+      description: "取得特定團隊的成員列表。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         teamId: z.string().min(1).describe("團隊 ID"),
@@ -178,7 +178,7 @@ export function registerProjectTools(
   server.registerTool(
     "get_project",
     {
-      description: "取得單一專案的詳細資訊",
+      description: "取得單一專案的詳細資訊。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
       },
@@ -208,7 +208,7 @@ export function registerProjectTools(
   server.registerTool(
     "get_team",
     {
-      description: "取得特定團隊的詳細資訊",
+      description: "取得特定團隊的詳細資訊。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         teamId: z.string().min(1).describe("團隊 ID 或名稱"),
