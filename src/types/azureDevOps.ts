@@ -945,6 +945,16 @@ export const searchWikiOutputSchema = z
   })
   .passthrough();
 
+export const getMeOutputSchema = z
+  .object({
+    id: z.string().optional(),
+    displayName: z.string().optional(),
+    uniqueName: z.string().optional(),
+    url: z.string().optional(),
+    imageUrl: z.string().optional(),
+  })
+  .passthrough();
+
 export function normalizeAzureDevOpsDates<T>(value: T): T {
   if (value instanceof Date) {
     return value.toISOString() as unknown as T;

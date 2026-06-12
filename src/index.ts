@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   registerWorkItemTools(mcpServer, client.wit);
   registerIterationTools(mcpServer, client.wit, client.work);
   registerPullRequestTools(mcpServer, client.git);
-  registerProjectTools(mcpServer, client.core);
+  registerProjectTools(mcpServer, client.core, client.connect);
   registerPipelineTools(mcpServer, client.build, client.git);
   registerWikiTools(mcpServer, client.wiki);
 

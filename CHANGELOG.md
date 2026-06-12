@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-12
+
+### Added
+
+- 新增 `get_me` 工具，透過 PAT Token 取得目前登入使用者的顯示名稱、帳號（uniqueName）與 ID
+- `update_work_item` 新增 `removeRelations` 參數，可依 url（及選填 rel）比對現有連結並移除，補齊與 `addRelations` 對稱的操作
+
 ## [0.6.0] - 2026-06-12
 
 ### Added

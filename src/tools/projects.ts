@@ -1,10 +1,12 @@
 import type { ICoreApi } from "azure-devops-node-api/CoreApi";
 import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 import type * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
+import type { ConnectionData } from "azure-devops-node-api/interfaces/LocationsInterfaces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
 import {
   ensureArray,
+  getMeOutputSchema,
   normalizeAzureDevOpsDates,
   projectOutputSchema,
   projectTeamMemberOutputSchema,
@@ -14,7 +16,29 @@ import {
 export function registerProjectTools(
   server: McpServer,
   coreApi: ICoreApi,
+  connect: () => Promise<ConnectionData>,
 ): void {
+  // ── get_me ─────────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_me",
+    {
+      description: "取得目前 PAT Token 所對應的使用者資訊（顯示名稱、帳號、ID）。",
+      inputSchema: {},
+      outputSchema: getMeOutputSchema,
+    },
+    async () => {
+      const data = await connect();
+      const user = data.authenticatedUser;
+      return {
+        content: [],
+        structuredContent: {
+          id: user?.id,
+          displayName: user?.providerDisplayName,
+          uniqueName: (user?.properties as Record<string, { $value: string }> | undefined)?.["Account"]?.$value,
+        },
+      };
+    },
+  );
   server.registerTool(
     "list_projects",
     {

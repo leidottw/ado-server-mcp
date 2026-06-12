@@ -202,6 +202,18 @@ export function registerWorkItemTools(
           )
           .optional()
           .describe("要新增的關聯清單"),
+        removeRelations: z
+          .array(
+            z.object({
+              url: z.string().describe("目標工作項目的 URL"),
+              rel: z
+                .string()
+                .optional()
+                .describe("關聯類型（選填，用於同一目標有多種關聯時精確比對）"),
+            }),
+          )
+          .optional()
+          .describe("要移除的關聯清單，依 url（及選填的 rel）比對現有 relations"),
         bypassRules: z.boolean().optional().describe("略過工作項目規則驗證"),
         suppressNotifications: z
           .boolean()
@@ -215,6 +227,7 @@ export function registerWorkItemTools(
       state,
       fields,
       addRelations,
+      removeRelations,
       bypassRules,
       suppressNotifications,
     }: {
@@ -226,6 +239,7 @@ export function registerWorkItemTools(
         url: string;
         attributes?: Record<string, unknown>;
       }>;
+      removeRelations?: Array<{ url: string; rel?: string }>;
       bypassRules?: boolean;
       suppressNotifications?: boolean;
     }) => {
@@ -261,9 +275,34 @@ export function registerWorkItemTools(
           });
         }
       }
+      if (removeRelations && removeRelations.length > 0) {
+        const existing = await witApi.getWorkItem(id, undefined, undefined, WorkItemExpand.Relations);
+        const existingRelations = existing?.relations ?? [];
+        const indices: number[] = [];
+        for (const target of removeRelations) {
+          const idx = existingRelations.findIndex(
+            (r) =>
+              r.url === target.url &&
+              (target.rel === undefined || r.rel === target.rel),
+          );
+          if (idx === -1) {
+            throw new Error(
+              `找不到符合的 relation：url=${target.url}${target.rel ? `，rel=${target.rel}` : ""}`,
+            );
+          }
+          indices.push(idx);
+        }
+        // 倒序移除，避免 index 位移
+        for (const idx of indices.sort((a, b) => b - a)) {
+          operations.push({
+            op: VSSInterfaces.Operation.Remove,
+            path: `/relations/${idx}`,
+          });
+        }
+      }
       if (operations.length === 0) {
         throw new Error(
-          "至少需要提供 state、fields 或 addRelations 其中一個屬性進行更新。",
+          "至少需要提供 state、fields、addRelations 或 removeRelations 其中一個屬性進行更新。",
         );
       }
       const response = await witApi.updateWorkItem(
