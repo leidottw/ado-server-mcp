@@ -57,6 +57,15 @@
 - `get_team` - 取得特定團隊的詳細資訊
 - `get_team_members` - 取得特定團隊的成員列表
 
+### Wiki 管理
+
+- `get_wikis` - 列出 Collection 或指定專案下所有 Wiki
+- `get_wiki_page` - 取得 Wiki 指定頁面的內容與中繼資料
+- `list_wiki_pages` - 取得 Wiki 頁面樹狀結構（支援 recursionLevel）
+- `create_wiki_page` - 在指定 Wiki 中建立新頁面或子頁面（CodeWiki 須指定 branch）
+- `update_wiki_page` - 更新 Wiki 現有頁面內容（自動取得 ETag，無需手動傳入）
+- `search_wiki` - 依關鍵字全文搜尋 Wiki 頁面（project 參數限填名稱，不支援 ID）
+
 ## 需求條件
 
 - Node.js 18+ 或 Bun
@@ -198,7 +207,9 @@ src/
     ├── projects.ts       # 專案相關工具
     ├── pullRequests.ts   # 拉取請求相關工具
     ├── workItems.ts      # 工作項相關工具
-    └── iterations.ts     # Iteration 管理工具
+    ├── iterations.ts     # Iteration 管理工具
+    ├── pipelines.ts      # Pipeline 相關工具
+    └── wiki.ts           # Wiki 相關工具
 ```
 
 ## License
