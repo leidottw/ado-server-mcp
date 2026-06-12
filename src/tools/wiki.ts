@@ -319,10 +319,10 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       description: "在 Wiki 中搜尋關鍵字，回傳符合的頁面清單。",
       inputSchema: {
         searchText: z.string().min(1).describe("搜尋關鍵字"),
-        project: z
+        projectName: z
           .string()
           .optional()
-          .describe("限定搜尋範圍的專案名稱（須填名稱，不支援 ID；不填則搜尋所有專案）"),
+          .describe("限定搜尋範圍的專案名稱（不填則搜尋所有專案）"),
         top: z
           .number()
           .int()
@@ -342,18 +342,18 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
     },
     async ({
       searchText,
-      project,
+      projectName,
       top = 25,
       skip = 0,
     }: {
       searchText: string;
-      project?: string;
+      projectName?: string;
       top?: number;
       skip?: number;
     }) => {
       const body: JsonObject = { searchText, $top: top, $skip: skip };
-      if (project) {
-        body.filters = { Project: [project] };
+      if (projectName) {
+        body.filters = { Project: [projectName] };
       }
       const result = await wikiRestPost("_apis/search/wikisearchresults", body);
       return {
