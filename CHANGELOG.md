@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.6.0-beta.1] - 2026-06-12
+
 ### Added
 
 - 新增 `get_work_item_type_fields` 工具，取得指定工作項目類型的完整欄位定義（含 referenceName、是否必填、allowedValues、預設值）
