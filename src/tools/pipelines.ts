@@ -323,7 +323,10 @@ export function registerPipelineTools(
     "get_build_logs",
     {
       description:
-        "取得 Build 的 log 清單或特定 log 的內容，可用於檢視 PR 觸發的 CI 建置結果。省略 logId 時回傳所有 log 的清單（含行數），提供 logId 時回傳該 log 的文字內容。",
+        "取得 Build 的 log 清單或特定 log 的內容，可用於檢視 PR 觸發的 CI 建置結果。" +
+        "省略 logId 時回傳所有 log 的清單（含行數），提供 logId 時回傳該 log 的文字內容。" +
+        "提供 logId 時可用 grep 參數以正規表示式過濾關鍵字，大幅節省 token；grep 與 startLine/endLine 互斥，同時提供時 grep 優先。" +
+        "建議搭配 get_build_timeline 使用：先取得失敗 task 的 logId 與 errorIssues，再用 grep 快速定位完整錯誤上下文。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         buildId: z.number().int().positive().describe("Build（執行）ID"),
@@ -338,13 +341,34 @@ export function registerPipelineTools(
           .int()
           .min(0)
           .optional()
-          .describe("起始行號（1-based），僅在提供 logId 時有效"),
+          .describe("起始行號（1-based），僅在提供 logId 時有效；提供 grep 時忽略"),
         endLine: z
           .number()
           .int()
           .min(0)
           .optional()
-          .describe("結束行號（1-based），僅在提供 logId 時有效"),
+          .describe("結束行號（1-based），僅在提供 logId 時有效；提供 grep 時忽略"),
+        grep: z
+          .string()
+          .optional()
+          .describe(
+            "正規表示式（不分大小寫）。提供時只回傳符合的行及其上下文，大幅節省 token。" +
+              "例：'error|failed|exception'，或從 get_build_timeline errorIssues 取得的關鍵字",
+          ),
+        grepContext: z
+          .number()
+          .int()
+          .min(0)
+          .max(20)
+          .optional()
+          .describe("每個符合行前後各附帶幾行上下文，預設 2"),
+        maxMatches: z
+          .number()
+          .int()
+          .positive()
+          .max(200)
+          .optional()
+          .describe("最多回傳幾個符合段落，預設 50"),
       },
       outputSchema: getBuildLogsOutputSchema,
     },
@@ -354,14 +378,70 @@ export function registerPipelineTools(
       logId,
       startLine,
       endLine,
+      grep,
+      grepContext,
+      maxMatches,
     }: {
       project: string;
       buildId: number;
       logId?: number;
       startLine?: number;
       endLine?: number;
+      grep?: string;
+      grepContext?: number;
+      maxMatches?: number;
     }) => {
       if (logId !== undefined) {
+        if (grep !== undefined) {
+          let regex: RegExp;
+          try {
+            regex = new RegExp(grep, "i");
+          } catch (e) {
+            return {
+              content: [],
+              structuredContent: {
+                error: `grep 參數無效的正規表示式：${(e as Error).message}`,
+              },
+            };
+          }
+
+          const allLines = ensureArray<string>(
+            await buildApi.getBuildLogLines(project, buildId, logId),
+          );
+          const ctx = grepContext ?? 2;
+          const maxM = maxMatches ?? 50;
+          const matchItems: Array<{
+            line: number;
+            text: string;
+            context: string[];
+          }> = [];
+          let totalMatches = 0;
+
+          for (let i = 0; i < allLines.length; i++) {
+            if (regex.test(allLines[i])) {
+              totalMatches++;
+              if (matchItems.length < maxM) {
+                const contextLines: string[] = [];
+                const ctxStart = Math.max(0, i - ctx);
+                const ctxEnd = Math.min(allLines.length - 1, i + ctx);
+                for (let j = ctxStart; j <= ctxEnd; j++) {
+                  if (j !== i) contextLines.push(allLines[j]);
+                }
+                matchItems.push({
+                  line: i + 1,
+                  text: allLines[i],
+                  context: contextLines,
+                });
+              }
+            }
+          }
+
+          return {
+            content: [],
+            structuredContent: { matches: matchItems, totalMatches },
+          };
+        }
+
         const lines = await buildApi.getBuildLogLines(
           project,
           buildId,

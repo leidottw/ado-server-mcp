@@ -691,6 +691,19 @@ export const getBuildLogsOutputSchema = z
   .object({
     logs: z.array(buildLogSchema).optional(),
     lines: z.array(z.string()).optional(),
+    matches: z
+      .array(
+        z
+          .object({
+            line: z.number(),
+            text: z.string(),
+            context: z.array(z.string()),
+          })
+          .passthrough(),
+      )
+      .optional(),
+    totalMatches: z.number().optional(),
+    error: z.string().optional(),
   })
   .passthrough();
 
