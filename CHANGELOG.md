@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-06-13
+
+### Fixed
+
+- 補齊 `README.md` 功能清單：新增 0.8.0 遺漏的 Git 管理分類（6 個工具）、Pipeline 補強（`get_build_timeline`、`cancel_build`）、PR 補強（`get_pull_request_diff`、`get_pull_request_work_items`）、Work Items 補強（`delete_work_item`、`get_work_item_revisions`、`list_queries`、`run_query`、`download_work_item_attachment`、`add_work_item_attachment`）
+
 ## [0.8.0] - 2026-06-13
 
 ### Added

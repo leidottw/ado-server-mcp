@@ -9,13 +9,19 @@
 - `get_work_item` - 取得單一工作項目詳細資料
 - `create_work_item` - 建立新的工作項目
 - `update_work_item` - 更新工作項目欄位或工作流程狀態
+- `delete_work_item` - 將工作項目軟刪除至資源回收筒
 - `query_work_items` - 使用 WIQL 查詢工作項目
 - `list_work_item_types` - 列出專案中可用的工作項目類型
 - `add_work_item_comment` - 在工作項目上新增評論
 - `get_work_item_comments` - 取得工作項目的評論清單
+- `get_work_item_revisions` - 取得工作項目欄位變更歷程
 - `get_work_item_type_fields` - 取得指定工作項目類型的完整欄位定義（含 referenceName、是否必填、allowedValues、預設值）
 - `add_work_item_tags` - 安全附加 Tag 至工作項目（merge 現有 Tag，不覆蓋）
 - `remove_work_item_tags` - 從工作項目精確移除指定 Tag，保留其餘 Tag
+- `list_queries` - 列出專案共用查詢（樹狀結構）
+- `run_query` - 執行共用查詢（by queryId），格式與 query_work_items 一致
+- `download_work_item_attachment` - 下載附件至暫存檔並回傳路徑
+- `add_work_item_attachment` - 上傳本機檔案為工作項目附件
 
 ### Iteration 管理
 
@@ -27,7 +33,6 @@
 
 ### 拉取請求管理
 
-- `get_repositories` - 列出指定專案內的 Git 儲存庫
 - `get_pull_requests` - 取得指定專案下的 Git 拉取請求
 - `get_pull_request_details` - 取得單一拉取請求詳細資訊（含所有討論串）
 - `create_pull_request` - 建立新的拉取請求
@@ -36,7 +41,9 @@
 - `get_pull_request_threads` - 取得拉取請求的所有討論串
 - `get_pull_request_changes` - 取得拉取請求的檔案變更清單
 - `get_pull_request_statuses` - 取得拉取請求的 CI/build 狀態清單
-- `update_pull_request` - 更新拉取請求（標題、說明、狀態、草稿模式）
+- `get_pull_request_diff` - 取得拉取請求的 unified diff（自動略過二進位檔與超過 1 MB 的檔案）
+- `get_pull_request_work_items` - 取得拉取請求關聯的工作項目清單
+- `update_pull_request` - 更新拉取請求（標題、說明、狀態、草稿模式、合併策略）
 - `update_pull_request_reviewer` - 設定或更新拉取請求的審查者投票（核准、拒絕等）
 - `update_pull_request_thread` - 更新拉取請求討論串的狀態（例如標記為已解決）
 
@@ -49,6 +56,8 @@
 - `get_pipeline_definition` - 取得單一 Pipeline 定義的詳細資訊，包含 repository、變數與觸發設定
 - `get_pipeline_definition_yaml` - 取得 Pipeline 定義的完整 YAML 內容
 - `get_build_logs` - 取得 Build 的 log 清單或特定 log 的內容
+- `get_build_timeline` - 取得 Build 執行時間軸（stage/job/task 成敗，failedOnly 模式預設只回傳失敗節點）
+- `cancel_build` - 取消正在執行的 Build
 
 ### 專案管理
 
@@ -58,6 +67,15 @@
 - `get_project_teams` - 取得指定專案底下的團隊列表
 - `get_team` - 取得特定團隊的詳細資訊
 - `get_team_members` - 取得特定團隊的成員列表
+
+### Git 管理
+
+- `get_repositories` - 列出指定專案內的 Git 儲存庫
+- `list_branches` - 列出儲存庫分支，標示預設分支
+- `list_commits` - 依分支、路徑、作者、日期範圍篩選 commit 歷程
+- `get_commit` - 取得單一 commit 詳情與變更檔案清單（不含 diff）
+- `get_file_content` - 讀取任意分支 / commit / tag 的檔案內容，支援行範圍切割
+- `search_code` - 依關鍵字搜尋程式碼（需 ADO Server 安裝 Search extension）
 
 ### Wiki 管理
 
@@ -211,7 +229,8 @@ src/
     ├── workItems.ts      # 工作項相關工具
     ├── iterations.ts     # Iteration 管理工具
     ├── pipelines.ts      # Pipeline 相關工具
-    └── wiki.ts           # Wiki 相關工具
+    ├── wiki.ts           # Wiki 相關工具
+    └── git.ts            # Git 相關工具
 ```
 
 ## License
