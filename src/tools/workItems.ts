@@ -30,6 +30,7 @@ import {
   getWorkItemRevisionsOutputSchema,
   deleteWorkItemOutputSchema,
 } from "../types/azureDevOps.js";
+import { deliver } from "../fileHandoff.js";
 
 const workItemIdSchema = z.union([
   z.string().regex(/^\d+$/).transform(Number),
@@ -395,6 +396,13 @@ export function registerWorkItemTools(
             "workItemDetails 回傳格式：objects（預設）回傳物件陣列；rows 回傳 fieldNames + rows 二維陣列，" +
               "筆數多（50 筆以上）時可省下大量重複欄位名稱 token。僅在提供 fetchFields 時有效。",
           ),
+        output: z
+          .enum(["inline", "file", "auto"])
+          .optional()
+          .describe(
+            "workItemDetails 回傳方式：inline 直接回傳；file 寫入暫存檔回傳路徑；auto（預設）依大小自動判斷。" +
+              "僅在提供 fetchFields 時有效。",
+          ),
       },
       outputSchema: queryWorkItemsOutputSchema,
     },
@@ -404,12 +412,14 @@ export function registerWorkItemTools(
       top,
       fetchFields,
       format,
+      output = "auto",
     }: {
       project?: string;
       wiql: string;
       top?: number;
       fetchFields?: string[];
       format?: "objects" | "rows";
+      output?: "inline" | "file" | "auto";
     }) => {
       const teamContext: CoreInterfaces.TeamContext | undefined = project
         ? { project }
@@ -469,42 +479,47 @@ export function registerWorkItemTools(
           format === "rows" ? toRowsFormat(fetched, fetchFields) : fetched;
       }
 
-      return {
-        content: [],
-        structuredContent: normalizeAzureDevOpsDates({
-          asOf: wiqlResult.asOf ?? undefined,
-          columns: columns.map((column) => ({
-            referenceName: column.referenceName ?? undefined,
-            name: column.name ?? undefined,
-            url: column.url ?? undefined,
-          })),
-          query: wiql,
-          queryResultType: wiqlResult.queryResultType ?? undefined,
-          queryType: wiqlResult.queryType ?? undefined,
-          queryResultUrl: undefined,
-          sortColumns: wiqlResult.sortColumns ?? undefined,
-          workItems: workItems.map((item) => ({
-            id: item.id ?? undefined,
-            url: item.url ?? undefined,
-          })),
-          workItemRelations: workItemRelations.map((rel) => ({
-            rel: rel.rel ?? undefined,
-            source: rel.source
-              ? {
-                  id: rel.source.id ?? undefined,
-                  url: rel.source.url ?? undefined,
-                }
-              : undefined,
-            target: rel.target
-              ? {
-                  id: rel.target.id ?? undefined,
-                  url: rel.target.url ?? undefined,
-                }
-              : undefined,
-          })),
-          workItemDetails,
-        }),
-      };
+      const base = normalizeAzureDevOpsDates({
+        asOf: wiqlResult.asOf ?? undefined,
+        columns: columns.map((column) => ({
+          referenceName: column.referenceName ?? undefined,
+          name: column.name ?? undefined,
+          url: column.url ?? undefined,
+        })),
+        query: wiql,
+        queryResultType: wiqlResult.queryResultType ?? undefined,
+        queryType: wiqlResult.queryType ?? undefined,
+        queryResultUrl: undefined,
+        sortColumns: wiqlResult.sortColumns ?? undefined,
+        workItems: workItems.map((item) => ({
+          id: item.id ?? undefined,
+          url: item.url ?? undefined,
+        })),
+        workItemRelations: workItemRelations.map((rel) => ({
+          rel: rel.rel ?? undefined,
+          source: rel.source
+            ? { id: rel.source.id ?? undefined, url: rel.source.url ?? undefined }
+            : undefined,
+          target: rel.target
+            ? { id: rel.target.id ?? undefined, url: rel.target.url ?? undefined }
+            : undefined,
+        })),
+      });
+
+      if (workItemDetails !== undefined) {
+        const detailJson = JSON.stringify(workItemDetails);
+        const handoff = await deliver(detailJson, {
+          output,
+          toolName: "query_work_items",
+          key: "wiql",
+          ext: "json",
+        });
+        if ("savedToFile" in handoff) {
+          const { savedToFile: _, ...outputFile } = handoff;
+          return { content: [], structuredContent: { ...base, outputFile } };
+        }
+      }
+      return { content: [], structuredContent: { ...base, workItemDetails } };
     },
   );
   server.registerTool(
@@ -998,6 +1013,13 @@ export function registerWorkItemTools(
             "workItemDetails 回傳格式：objects（預設）回傳物件陣列；rows 回傳 fieldNames + rows 二維陣列，" +
               "筆數多（50 筆以上）時可省下大量重複欄位名稱 token。僅在提供 fetchFields 時有效。",
           ),
+        output: z
+          .enum(["inline", "file", "auto"])
+          .optional()
+          .describe(
+            "workItemDetails 回傳方式：inline 直接回傳；file 寫入暫存檔回傳路徑；auto（預設）依大小自動判斷。" +
+              "僅在提供 fetchFields 時有效。",
+          ),
       },
       outputSchema: queryWorkItemsOutputSchema,
     },
@@ -1007,12 +1029,14 @@ export function registerWorkItemTools(
       top,
       fetchFields,
       format,
+      output = "auto",
     }: {
       project: string;
       queryId: string;
       top?: number;
       fetchFields?: string[];
       format?: "objects" | "rows";
+      output?: "inline" | "file" | "auto";
     }) => {
       const teamContext: CoreInterfaces.TeamContext = { project };
       const wiqlResult = await witApi.queryById(queryId, teamContext, undefined, top);
@@ -1060,30 +1084,41 @@ export function registerWorkItemTools(
           format === "rows" ? toRowsFormat(fetched, fetchFields) : fetched;
       }
 
-      return {
-        content: [],
-        structuredContent: normalizeAzureDevOpsDates({
-          asOf: wiqlResult.asOf ?? undefined,
-          columns: columns.map((column) => ({
-            referenceName: column.referenceName ?? undefined,
-            name: column.name ?? undefined,
-            url: column.url ?? undefined,
-          })),
-          query: queryId,
-          queryResultType: wiqlResult.queryResultType ?? undefined,
-          queryType: wiqlResult.queryType ?? undefined,
-          workItems: workItems.map((item) => ({
-            id: item.id ?? undefined,
-            url: item.url ?? undefined,
-          })),
-          workItemRelations: workItemRelations.map((rel) => ({
-            rel: rel.rel ?? undefined,
-            source: rel.source ? { id: rel.source.id ?? undefined, url: rel.source.url ?? undefined } : undefined,
-            target: rel.target ? { id: rel.target.id ?? undefined, url: rel.target.url ?? undefined } : undefined,
-          })),
-          workItemDetails,
-        }),
-      };
+      const runBase = normalizeAzureDevOpsDates({
+        asOf: wiqlResult.asOf ?? undefined,
+        columns: columns.map((column) => ({
+          referenceName: column.referenceName ?? undefined,
+          name: column.name ?? undefined,
+          url: column.url ?? undefined,
+        })),
+        query: queryId,
+        queryResultType: wiqlResult.queryResultType ?? undefined,
+        queryType: wiqlResult.queryType ?? undefined,
+        workItems: workItems.map((item) => ({
+          id: item.id ?? undefined,
+          url: item.url ?? undefined,
+        })),
+        workItemRelations: workItemRelations.map((rel) => ({
+          rel: rel.rel ?? undefined,
+          source: rel.source ? { id: rel.source.id ?? undefined, url: rel.source.url ?? undefined } : undefined,
+          target: rel.target ? { id: rel.target.id ?? undefined, url: rel.target.url ?? undefined } : undefined,
+        })),
+      });
+
+      if (workItemDetails !== undefined) {
+        const detailJson = JSON.stringify(workItemDetails);
+        const handoff = await deliver(detailJson, {
+          output,
+          toolName: "run_query",
+          key: "wiql",
+          ext: "json",
+        });
+        if ("savedToFile" in handoff) {
+          const { savedToFile: _, ...outputFile } = handoff;
+          return { content: [], structuredContent: { ...runBase, outputFile } };
+        }
+      }
+      return { content: [], structuredContent: { ...runBase, workItemDetails } };
     },
   );
 

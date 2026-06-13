@@ -14,6 +14,7 @@ import {
   getCommitOutputSchema,
   searchCodeOutputSchema,
 } from "../types/azureDevOps.js";
+import { deliver } from "../fileHandoff.js";
 
 const envSource =
   typeof Bun !== "undefined" && typeof Bun.env !== "undefined"
@@ -107,6 +108,12 @@ export function registerGitTools(
           .max(100)
           .optional()
           .describe("省略 filePath 時最多處理幾個檔案，預設 30，上限 100"),
+        output: z
+          .enum(["inline", "file", "auto"])
+          .optional()
+          .describe(
+            "回傳方式：inline 直接回傳 diff 內容；file 寫入暫存檔回傳路徑；auto（預設）依大小自動判斷。",
+          ),
       },
       outputSchema: getPullRequestDiffOutputSchema,
     },
@@ -116,12 +123,14 @@ export function registerGitTools(
       project,
       filePath,
       maxFiles = 30,
+      output = "auto",
     }: {
       repositoryId: string;
       pullRequestId: number;
       project?: string;
       filePath?: string;
       maxFiles?: number;
+      output?: "inline" | "file" | "auto";
     }) => {
       const pr = await gitApi.getPullRequest(repositoryId, pullRequestId, project);
       if (!pr) {
@@ -282,10 +291,24 @@ export function registerGitTools(
         }
       }
 
+      const diffText = diffParts.join("\n");
+      const handoff = await deliver(diffText, {
+        output,
+        toolName: "get_pull_request_diff",
+        key: `pr${pullRequestId}`,
+        ext: "diff",
+      });
+      if ("savedToFile" in handoff) {
+        const { savedToFile: _, ...outputFile } = handoff;
+        return {
+          content: [],
+          structuredContent: { outputFile, fileCount: changeEntries.length, skippedFiles },
+        };
+      }
       return {
         content: [],
         structuredContent: {
-          diff: diffParts.join("\n"),
+          diff: handoff.text,
           fileCount: changeEntries.length,
           skippedFiles,
         },
@@ -324,6 +347,12 @@ export function registerGitTools(
           .positive()
           .optional()
           .describe("結束行號（1-based），省略時讀至末行"),
+        output: z
+          .enum(["inline", "file", "auto"])
+          .optional()
+          .describe(
+            "回傳方式：inline 直接回傳內容；file 寫入暫存檔回傳路徑；auto（預設）依大小自動判斷。",
+          ),
       },
       outputSchema: getFileContentOutputSchema,
     },
@@ -335,6 +364,7 @@ export function registerGitTools(
       refType,
       startLine,
       endLine,
+      output = "auto",
     }: {
       repositoryId: string;
       path: string;
@@ -343,6 +373,7 @@ export function registerGitTools(
       refType?: "branch" | "commit" | "tag";
       startLine?: number;
       endLine?: number;
+      output?: "inline" | "file" | "auto";
     }) => {
       let versionDescriptor: GitInterfaces.GitVersionDescriptor | undefined;
       if (ref) {
@@ -401,13 +432,22 @@ export function registerGitTools(
         returnedRange = { start, end };
       }
 
+      const ext = path.includes(".") ? (path.split(".").pop() ?? "txt") : "txt";
+      const repoKey = repositoryId.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 20);
+      const pathKey = path.replace(/\//g, "_").replace(/^_/, "").slice(0, 40);
+      const handoff = await deliver(returnedContent, {
+        output,
+        toolName: "get_file_content",
+        key: `${repoKey}-${pathKey}`,
+        ext,
+      });
+      if ("savedToFile" in handoff) {
+        const { savedToFile: _, ...outputFile } = handoff;
+        return { content: [], structuredContent: { outputFile, totalLines, returnedRange } };
+      }
       return {
         content: [],
-        structuredContent: {
-          content: returnedContent,
-          totalLines,
-          returnedRange,
-        },
+        structuredContent: { content: handoff.text, totalLines, returnedRange },
       };
     },
   );

@@ -1,6 +1,19 @@
 import { z } from "zod";
 import * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 
+// ─── File Handoff Schema ──────────────────────────────────────────────────────
+
+export const outputFileSchema = z
+  .object({
+    path: z.string(),
+    bytes: z.number(),
+    lines: z.number(),
+    encoding: z.literal("utf-8"),
+    preview: z.string(),
+    hint: z.string(),
+  })
+  .passthrough();
+
 /**
  * Azure DevOps schema mappings derived from the installed
  * azure-devops-node-api package (v15.1.2).
@@ -438,6 +451,7 @@ const workItemQueryResultSchema = z
     workItemDetails: z
       .union([z.array(workItemSchema), workItemRowsSchema])
       .optional(),
+    outputFile: outputFileSchema.optional(),
   })
   .partial()
   .passthrough();
@@ -700,6 +714,7 @@ export const getBuildLogsOutputSchema = z
   .object({
     logs: z.array(buildLogSchema).optional(),
     lines: z.array(z.string()).optional(),
+    outputFile: outputFileSchema.optional(),
     matches: z
       .array(
         z
@@ -759,7 +774,7 @@ export const getPipelineDefinitionOutputSchema = z
   .passthrough();
 
 export const getPipelineDefinitionYamlOutputSchema = z
-  .object({ yaml: z.string().optional() })
+  .object({ yaml: z.string().optional(), outputFile: outputFileSchema.optional() })
   .passthrough();
 
 // ─── PR Review Schemas ─────────────────────────────────────────────────────────
@@ -989,6 +1004,7 @@ const skippedFileSchema = z
 export const getPullRequestDiffOutputSchema = z
   .object({
     diff: z.string().optional(),
+    outputFile: outputFileSchema.optional(),
     fileCount: z.number(),
     skippedFiles: z.array(skippedFileSchema),
   })
@@ -997,6 +1013,7 @@ export const getPullRequestDiffOutputSchema = z
 export const getFileContentOutputSchema = z
   .object({
     content: z.string().optional(),
+    outputFile: outputFileSchema.optional(),
     totalLines: z.number(),
     returnedRange: z
       .object({ start: z.number(), end: z.number() })

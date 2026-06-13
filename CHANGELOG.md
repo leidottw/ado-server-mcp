@@ -12,6 +12,12 @@
 - `query_work_items` / `run_query` 新增 `format` 參數：設為 `rows` 時 `workItemDetails` 改以 `fieldNames + rows` 二維陣列回傳，50 筆以上搭配 `fetchFields` 可省 40–60% output token
 - `get_pull_requests`、`list_pipeline_runs`、`get_pull_request_threads`、`list_wiki_pages` 新增 `detail` 參數（預設 `minimal`）：`minimal` 只回傳識別與狀態欄位，省略大型子物件與頁面內容，可省 70–80% output token；需要完整欄位時傳入 `detail: "full"` ⚠️ **Breaking change**：舊行為等同 `detail: "full"`，未指定時預設改為 `minimal`
 
+### Added
+
+- 新增 `src/fileHandoff.ts` 共用模組：大型內容超過 `ADO_MCP_INLINE_LIMIT`（預設 20000 字元）時自動寫入暫存檔（`$TMPDIR/ado-mcp/`）並回傳路徑 + preview，讓 agent 用 Read/Grep 工具按需讀取，大幅節省 token
+  - 環境變數 `ADO_MCP_OUTPUT_DIR`、`ADO_MCP_INLINE_LIMIT`、`ADO_MCP_FILE_HANDOFF`（設為 `off` 可停用）
+  - 適用工具各新增 `output: "inline" | "file" | "auto"` 參數（預設 `auto`）：`get_build_logs`（有 logId 且無 grep）、`get_pipeline_definition_yaml`、`get_wiki_page`、`get_pull_request_diff`、`get_file_content`、`query_work_items` / `run_query`（有 fetchFields）
+
 ## [0.8.1] - 2026-06-13
 
 ### Fixed

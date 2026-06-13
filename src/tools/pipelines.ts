@@ -16,6 +16,7 @@ import {
   listPipelineRunsOutputSchema,
   queuePipelineOutputSchema,
 } from "../types/azureDevOps.js";
+import { deliver } from "../fileHandoff.js";
 
 export function registerPipelineTools(
   server: McpServer,
@@ -308,15 +309,23 @@ export function registerPipelineTools(
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         definitionId: z.number().int().positive().describe("Pipeline 定義 ID"),
+        output: z
+          .enum(["inline", "file", "auto"])
+          .optional()
+          .describe(
+            "回傳方式：inline 直接回傳內容；file 寫入暫存檔回傳路徑；auto（預設）依大小自動判斷。YAML 較大時建議 file。",
+          ),
       },
       outputSchema: getPipelineDefinitionYamlOutputSchema,
     },
     async ({
       project,
       definitionId,
+      output = "auto",
     }: {
       project: string;
       definitionId: number;
+      output?: "inline" | "file" | "auto";
     }) => {
       const def = await buildApi.getDefinition(project, definitionId);
       const yamlFilename = (
@@ -338,10 +347,18 @@ export function registerPipelineTools(
         undefined,
         true,
       );
-      return {
-        content: [],
-        structuredContent: { yaml: item?.content ?? undefined },
-      };
+      const yaml = item?.content ?? "";
+      const result = await deliver(yaml, {
+        output,
+        toolName: "get_pipeline_definition_yaml",
+        key: `def${definitionId}`,
+        ext: "yaml",
+      });
+      if ("savedToFile" in result) {
+        const { savedToFile: _, ...outputFile } = result;
+        return { content: [], structuredContent: { outputFile } };
+      }
+      return { content: [], structuredContent: { yaml: result.text || undefined } };
     },
   );
 
@@ -395,6 +412,13 @@ export function registerPipelineTools(
           .max(200)
           .optional()
           .describe("最多回傳幾個符合段落，預設 50"),
+        output: z
+          .enum(["inline", "file", "auto"])
+          .optional()
+          .describe(
+            "回傳方式：inline 直接回傳內容；file 寫入暫存檔回傳路徑；auto（預設）依大小自動判斷。" +
+              "僅在提供 logId 且無 grep 時有效（grep 結果一律 inline）。",
+          ),
       },
       outputSchema: getBuildLogsOutputSchema,
     },
@@ -407,6 +431,7 @@ export function registerPipelineTools(
       grep,
       grepContext,
       maxMatches,
+      output = "auto",
     }: {
       project: string;
       buildId: number;
@@ -416,6 +441,7 @@ export function registerPipelineTools(
       grep?: string;
       grepContext?: number;
       maxMatches?: number;
+      output?: "inline" | "file" | "auto";
     }) => {
       if (logId !== undefined) {
         if (grep !== undefined) {
@@ -466,17 +492,21 @@ export function registerPipelineTools(
           };
         }
 
-        const lines = await buildApi.getBuildLogLines(
-          project,
-          buildId,
-          logId,
-          startLine,
-          endLine,
+        const lines = ensureArray<string>(
+          await buildApi.getBuildLogLines(project, buildId, logId, startLine, endLine),
         );
-        return {
-          content: [],
-          structuredContent: { lines: ensureArray<string>(lines) },
-        };
+        const logText = lines.join("\n");
+        const handoff = await deliver(logText, {
+          output,
+          toolName: "get_build_logs",
+          key: `build${buildId}-log${logId}`,
+          ext: "log",
+        });
+        if ("savedToFile" in handoff) {
+          const { savedToFile: _, ...outputFile } = handoff;
+          return { content: [], structuredContent: { outputFile } };
+        }
+        return { content: [], structuredContent: { lines } };
       }
       const logs = await buildApi.getBuildLogs(project, buildId);
       return {

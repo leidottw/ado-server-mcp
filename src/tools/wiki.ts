@@ -12,6 +12,7 @@ import {
   normalizeAzureDevOpsDates,
   ensureArray,
 } from "../types/azureDevOps.js";
+import { deliver } from "../fileHandoff.js";
 
 const envSource =
   typeof Bun !== "undefined" && typeof Bun.env !== "undefined"
@@ -137,6 +138,12 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
           .optional()
           .default(true)
           .describe("是否包含頁面 Markdown 內容（預設 true）"),
+        output: z
+          .enum(["inline", "file", "auto"])
+          .optional()
+          .describe(
+            "回傳方式：inline 直接回傳內容；file 寫入暫存檔回傳路徑；auto（預設）依大小自動判斷。大型 Wiki 頁面建議 file。",
+          ),
       },
       outputSchema: getWikiPageOutputSchema,
     },
@@ -145,16 +152,35 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       wikiIdentifier,
       path,
       includeContent = true,
+      output = "auto",
     }: {
       project: string;
       wikiIdentifier: string;
       path: string;
       includeContent?: boolean;
+      output?: "inline" | "file" | "auto";
     }) => {
       const encodedPath = encodeURIComponent(path);
       const { data: page } = await wikiRestGet(
         `${project}/_apis/wiki/wikis/${wikiIdentifier}/pages?path=${encodedPath}&includeContent=${includeContent}`,
       );
+      const pageObj = page as Record<string, unknown>;
+      const pageContent = typeof pageObj["content"] === "string" ? pageObj["content"] : "";
+
+      if (includeContent && pageContent) {
+        const sanitizedPath = (path as string).replace(/\//g, "_").replace(/^_/, "");
+        const handoff = await deliver(pageContent, {
+          output,
+          toolName: "get_wiki_page",
+          key: `${wikiIdentifier}-${sanitizedPath}`,
+          ext: "md",
+        });
+        if ("savedToFile" in handoff) {
+          const { savedToFile: _, ...outputFile } = handoff;
+          const { content: _c, ...rest } = pageObj;
+          return { content: [], structuredContent: normalizeAzureDevOpsDates({ ...rest, outputFile }) };
+        }
+      }
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates(page),
