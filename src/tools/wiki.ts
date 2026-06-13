@@ -186,6 +186,12 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
           .optional()
           .default("full")
           .describe("遞迴深度（預設 full 取得完整樹狀結構）"),
+        detail: z
+          .enum(["minimal", "full"])
+          .optional()
+          .describe(
+            "minimal（預設）只回傳路徑與結構欄位，省略頁面內容；full 回傳完整欄位（含 content）",
+          ),
       },
       outputSchema: listWikiPagesOutputSchema,
     },
@@ -194,19 +200,23 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       wikiIdentifier,
       path = "/",
       recursionLevel = "full",
+      detail = "minimal",
     }: {
       project: string;
       wikiIdentifier: string;
       path?: string;
       recursionLevel?: string;
+      detail?: "minimal" | "full";
     }) => {
       const encodedPath = encodeURIComponent(path);
       const { data: page } = await wikiRestGet(
         `${project}/_apis/wiki/wikis/${wikiIdentifier}/pages?path=${encodedPath}&recursionLevel=${recursionLevel}`,
       );
+      const result =
+        detail === "minimal" ? stripWikiPageFull(page) : page;
       return {
         content: [],
-        structuredContent: normalizeAzureDevOpsDates(page),
+        structuredContent: normalizeAzureDevOpsDates(result),
       };
     },
   );
@@ -365,4 +375,18 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       };
     },
   );
+}
+
+function stripWikiPageFull(page: unknown): Record<string, unknown> {
+  if (!page || typeof page !== "object") return {};
+  const p = page as Record<string, unknown>;
+  return {
+    id: p["id"],
+    path: p["path"],
+    order: p["order"],
+    isParentPage: p["isParentPage"],
+    subPages: Array.isArray(p["subPages"])
+      ? p["subPages"].map(stripWikiPageFull)
+      : undefined,
+  };
 }

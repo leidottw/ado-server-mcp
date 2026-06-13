@@ -100,6 +100,13 @@ export function registerPipelineTools(
           ])
           .optional()
           .describe("執行狀態篩選，預設為 all"),
+        detail: z
+          .enum(["minimal", "full"])
+          .optional()
+          .describe(
+            "minimal（預設）只回傳 id、buildNumber、status、result、startTime、finishTime、sourceBranch、definition（id/name）；" +
+              "full 另回傳 requestedBy、requestedFor、parameters、reason、url 等完整欄位",
+          ),
       },
       outputSchema: listPipelineRunsOutputSchema,
     },
@@ -109,6 +116,7 @@ export function registerPipelineTools(
       top,
       branchName,
       statusFilter,
+      detail = "minimal",
     }: {
       project: string;
       definitionId: number;
@@ -121,6 +129,7 @@ export function registerPipelineTools(
         | "cancelling"
         | "postponed"
         | "notStarted";
+      detail?: "minimal" | "full";
     }) => {
       const statusMap: Record<string, BuildInterfaces.BuildStatus> = {
         all: BuildInterfaces.BuildStatus.All,
@@ -156,7 +165,24 @@ export function registerPipelineTools(
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
-          runs: ensureArray<BuildInterfaces.Build>(builds).map(mapBuild),
+          runs: ensureArray<BuildInterfaces.Build>(builds).map((b) => {
+            if (detail === "full") return mapBuild(b);
+            return {
+              id: b.id ?? undefined,
+              buildNumber: b.buildNumber ?? undefined,
+              status: b.status ?? undefined,
+              result: b.result ?? undefined,
+              startTime: b.startTime ?? undefined,
+              finishTime: b.finishTime ?? undefined,
+              sourceBranch: b.sourceBranch ?? undefined,
+              definition: b.definition
+                ? {
+                    id: b.definition.id ?? undefined,
+                    name: b.definition.name ?? undefined,
+                  }
+                : undefined,
+            };
+          }),
         }),
       };
     },
@@ -418,20 +444,18 @@ export function registerPipelineTools(
           let totalMatches = 0;
 
           for (let i = 0; i < allLines.length; i++) {
-            if (regex.test(allLines[i])) {
+            const line = allLines[i] ?? "";
+            if (regex.test(line)) {
               totalMatches++;
               if (matchItems.length < maxM) {
                 const contextLines: string[] = [];
                 const ctxStart = Math.max(0, i - ctx);
                 const ctxEnd = Math.min(allLines.length - 1, i + ctx);
                 for (let j = ctxStart; j <= ctxEnd; j++) {
-                  if (j !== i) contextLines.push(allLines[j]);
+                  const ctxLine = allLines[j];
+                  if (j !== i && ctxLine !== undefined) contextLines.push(ctxLine);
                 }
-                matchItems.push({
-                  line: i + 1,
-                  text: allLines[i],
-                  context: contextLines,
-                });
+                matchItems.push({ line: i + 1, text: line, context: contextLines });
               }
             }
           }

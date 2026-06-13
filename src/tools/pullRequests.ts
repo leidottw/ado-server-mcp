@@ -106,6 +106,13 @@ export function registerPullRequestTools(
           .describe("目標分支，例如 refs/heads/main"),
         top: z.number().int().positive().optional().describe("最多回傳筆數"),
         skip: z.number().int().min(0).optional().describe("跳過筆數（分頁用）"),
+        detail: z
+          .enum(["minimal", "full"])
+          .optional()
+          .describe(
+            "minimal（預設）只回傳識別與狀態欄位，createdBy 僅保留 displayName；" +
+              "full 另回傳 description、isDraft、reviewers、url 等完整欄位",
+          ),
       },
       outputSchema: z.object({
         project: z.string(),
@@ -122,6 +129,7 @@ export function registerPullRequestTools(
       targetRefName,
       top,
       skip,
+      detail = "minimal",
     }: {
       project: string;
       status?: "active" | "abandoned" | "completed" | "all";
@@ -132,6 +140,7 @@ export function registerPullRequestTools(
       targetRefName?: string;
       top?: number;
       skip?: number;
+      detail?: "minimal" | "full";
     }) => {
       const searchCriteria: GitInterfaces.GitPullRequestSearchCriteria = {};
       if (status && status !== "all") {
@@ -155,18 +164,38 @@ export function registerPullRequestTools(
           project,
           pullRequests: ensureArray<GitInterfaces.GitPullRequest>(
             pullRequests,
-          ).map((pr) => ({
-            pullRequestId: pr.pullRequestId ?? undefined,
-            repositoryId: pr.repository?.id ?? undefined,
-            title: pr.title ?? undefined,
-            status: pr.status ?? undefined,
-            sourceRefName: pr.sourceRefName ?? undefined,
-            targetRefName: pr.targetRefName ?? undefined,
-            creationDate: pr.creationDate ?? undefined,
-            mergeStatus: pr.mergeStatus ?? undefined,
-            createdBy: pr.createdBy ?? undefined,
-            url: pr.url ?? undefined,
-          })),
+          ).map((pr) => {
+            const base = {
+              pullRequestId: pr.pullRequestId ?? undefined,
+              repositoryId: pr.repository?.id ?? undefined,
+              title: pr.title ?? undefined,
+              status: pr.status ?? undefined,
+              sourceRefName: pr.sourceRefName ?? undefined,
+              targetRefName: pr.targetRefName ?? undefined,
+              creationDate: pr.creationDate ?? undefined,
+              mergeStatus: pr.mergeStatus ?? undefined,
+              createdBy: pr.createdBy
+                ? { displayName: pr.createdBy.displayName ?? undefined }
+                : undefined,
+            };
+            if (detail === "full") {
+              return {
+                ...base,
+                createdBy: pr.createdBy ?? undefined,
+                description: pr.description ?? undefined,
+                isDraft: pr.isDraft ?? undefined,
+                reviewers: ensureArray<GitInterfaces.IdentityRefWithVote>(
+                  pr.reviewers,
+                ).map((r) => ({
+                  displayName: r.displayName ?? undefined,
+                  uniqueName: r.uniqueName ?? undefined,
+                  vote: r.vote ?? undefined,
+                })),
+                url: pr.url ?? undefined,
+              };
+            }
+            return base;
+          }),
         }),
       };
     },
@@ -715,27 +744,69 @@ export function registerPullRequestTools(
           .int()
           .positive()
           .describe("拉取請求編號"),
+        detail: z
+          .enum(["minimal", "full"])
+          .optional()
+          .describe(
+            "minimal（預設）每筆討論串只回傳 id、status、isDeleted、lastUpdatedDate、" +
+              "threadContext.filePath，以及評論的 id/author.displayName/content（截斷至 300 字元）；" +
+              "full 回傳完整欄位（含 identities 對照表等）",
+          ),
       },
       outputSchema: getPullRequestThreadsOutputSchema,
     },
     async ({
       repositoryId,
       pullRequestId,
+      detail = "minimal",
     }: {
       repositoryId: string;
       pullRequestId: number;
+      detail?: "minimal" | "full";
     }) => {
       const threads = await gitApi.getThreads(
         repositoryId,
         pullRequestId,
         undefined,
       );
+      const threadArr =
+        ensureArray<GitInterfaces.GitPullRequestCommentThread>(threads);
+      if (detail === "full") {
+        return {
+          content: [],
+          structuredContent: normalizeAzureDevOpsDates({ threads: threadArr }),
+        };
+      }
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
-          threads: ensureArray<GitInterfaces.GitPullRequestCommentThread>(
-            threads,
-          ),
+          threads: threadArr.map((t) => ({
+            id: t.id ?? undefined,
+            status: t.status ?? undefined,
+            isDeleted: t.isDeleted ?? undefined,
+            lastUpdatedDate: t.lastUpdatedDate ?? undefined,
+            threadContext: t.threadContext
+              ? { filePath: t.threadContext.filePath ?? undefined }
+              : undefined,
+            comments: ensureArray(t.comments).map((c) => {
+              const raw = c as {
+                id?: number;
+                author?: { displayName?: string };
+                content?: string;
+              };
+              const content = raw.content ?? "";
+              return {
+                id: raw.id ?? undefined,
+                author: raw.author
+                  ? { displayName: raw.author.displayName ?? undefined }
+                  : undefined,
+                content:
+                  content.length > 300
+                    ? content.slice(0, 300) + "…"
+                    : content,
+              };
+            }),
+          })),
         }),
       };
     },

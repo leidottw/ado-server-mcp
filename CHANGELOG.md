@@ -10,6 +10,7 @@
 
 - `get_build_logs` 新增 `grep`、`grepContext`、`maxMatches` 參數：提供 `logId` 時可用正規表示式過濾 log 行，只回傳符合的行及其上下文，大幅節省 token；建議搭配 `get_build_timeline` 取得 errorIssues 後再 grep 關鍵字
 - `query_work_items` / `run_query` 新增 `format` 參數：設為 `rows` 時 `workItemDetails` 改以 `fieldNames + rows` 二維陣列回傳，50 筆以上搭配 `fetchFields` 可省 40–60% output token
+- `get_pull_requests`、`list_pipeline_runs`、`get_pull_request_threads`、`list_wiki_pages` 新增 `detail` 參數（預設 `minimal`）：`minimal` 只回傳識別與狀態欄位，省略大型子物件與頁面內容，可省 70–80% output token；需要完整欄位時傳入 `detail: "full"` ⚠️ **Breaking change**：舊行為等同 `detail: "full"`，未指定時預設改為 `minimal`
 
 ## [0.8.1] - 2026-06-13
 
