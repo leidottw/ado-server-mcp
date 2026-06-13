@@ -14,6 +14,8 @@
 | 命名      | tool 名稱用 `snake_case` 動詞開頭：`get_` / `list_` / `create_` / `update_` / `delete_` / `add_` / `remove_` / `queue_` / `search_` |
 | 版本      | 依 SemVer：新增 tool 升 MINOR；既有 tool 行為不相容變更升 MAJOR。同步更新 `CHANGELOG.md`（Keep a Changelog）與 `README.md` 功能清單 |
 | 目標環境  | **On-Premise ADO Server**，不可使用僅 Azure DevOps Services（雲端）才有的 API                                                       |
+| 大型文字輸出 | 回傳 log / diff / YAML / Markdown 等大型文字的工具，一律加 `output: "inline" \| "file" \| "auto"` 參數（預設 `auto`），使用 `src/fileHandoff.ts` 的 `deliver()` 回傳；output schema 加上 `outputFile: outputFileSchema.optional()` |
+| 列表工具 detail | `list_` / 回傳陣列的 `get_` 工具一律加 `detail: "minimal" \| "full"` 參數（預設 `minimal`）：`minimal` 只回識別與狀態欄位，`full` 回完整物件；視為 breaking change，升版時需特別標註 |
 
 ## 實作注意事項
 

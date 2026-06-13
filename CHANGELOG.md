@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [0.9.0-beta.1] - 2026-06-13
+
+此版本包含四項 token 優化改進：
+
+| 改進名稱 | 目的 | 新增參數 | 適用工具 |
+| ------- | ---- | ------- | ------- |
+| **Build Log Grep** | 在 server 端過濾 log，只回傳命中行與上下文，避免整份大型 log 佔用 context | `grep`、`grepContext`、`maxMatches` | `get_build_logs` |
+| **Work Item Rows Format** | 多筆 work item 改以欄名 + 二維陣列回傳，消除重複的 key 名稱 | `format` | `query_work_items`、`run_query` |
+| **List Detail Level** | 列表工具預設只回識別與狀態欄位，需要完整欄位時再指定 `full` ⚠️ Breaking change | `detail` | `get_pull_requests`、`list_pipeline_runs`、`get_pull_request_threads`、`list_wiki_pages` |
+| **File Handoff** | 大型內容超過閾值自動寫入暫存檔，回傳路徑與 preview，讓 agent 按需讀取 | `output` | `get_build_logs`、`get_pipeline_definition_yaml`、`get_wiki_page`、`get_pull_request_diff`、`get_file_content`、`query_work_items`、`run_query` |
+
 ### Changed
 
 - `get_build_logs` 新增 `grep`、`grepContext`、`maxMatches` 參數：提供 `logId` 時可用正規表示式過濾 log 行，只回傳符合的行及其上下文，大幅節省 token；建議搭配 `get_build_timeline` 取得 errorIssues 後再 grep 關鍵字
