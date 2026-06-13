@@ -9,6 +9,7 @@
 ### Changed
 
 - `get_build_logs` 新增 `grep`、`grepContext`、`maxMatches` 參數：提供 `logId` 時可用正規表示式過濾 log 行，只回傳符合的行及其上下文，大幅節省 token；建議搭配 `get_build_timeline` 取得 errorIssues 後再 grep 關鍵字
+- `query_work_items` / `run_query` 新增 `format` 參數：設為 `rows` 時 `workItemDetails` 改以 `fieldNames + rows` 二維陣列回傳，50 筆以上搭配 `fetchFields` 可省 40–60% output token
 
 ## [0.8.1] - 2026-06-13
 

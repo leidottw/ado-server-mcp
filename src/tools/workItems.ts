@@ -36,6 +36,28 @@ const workItemIdSchema = z.union([
   z.number().int().positive(),
 ]);
 
+type WorkItemRow = { id?: number; rev?: number; fields?: Record<string, unknown>; url?: string };
+
+function toRowsFormat(
+  items: WorkItemRow[],
+  requestedFields: string[],
+): { fieldNames: string[]; rows: (unknown | null)[][] } {
+  let fieldNames: string[];
+  if (requestedFields.length > 0) {
+    fieldNames = requestedFields;
+  } else {
+    const keySet = new Set<string>();
+    for (const item of items) {
+      for (const key of Object.keys(item.fields ?? {})) keySet.add(key);
+    }
+    fieldNames = Array.from(keySet);
+  }
+  const rows = items.map((item) =>
+    fieldNames.map((fn) => item.fields?.[fn] ?? null),
+  );
+  return { fieldNames, rows };
+}
+
 export function registerWorkItemTools(
   server: McpServer,
   witApi: IWorkItemTrackingApi,
@@ -366,6 +388,13 @@ export function registerWorkItemTools(
               "傳入空陣列表示取得所有欄位；傳入欄位清單則只取指定欄位以節省 token。" +
               "可呼叫 get_work_item_type_fields 取得該類型的完整欄位清單。",
           ),
+        format: z
+          .enum(["objects", "rows"])
+          .optional()
+          .describe(
+            "workItemDetails 回傳格式：objects（預設）回傳物件陣列；rows 回傳 fieldNames + rows 二維陣列，" +
+              "筆數多（50 筆以上）時可省下大量重複欄位名稱 token。僅在提供 fetchFields 時有效。",
+          ),
       },
       outputSchema: queryWorkItemsOutputSchema,
     },
@@ -374,11 +403,13 @@ export function registerWorkItemTools(
       wiql,
       top,
       fetchFields,
+      format,
     }: {
       project?: string;
       wiql: string;
       top?: number;
       fetchFields?: string[];
+      format?: "objects" | "rows";
     }) => {
       const teamContext: CoreInterfaces.TeamContext | undefined = project
         ? { project }
@@ -404,12 +435,8 @@ export function registerWorkItemTools(
       }>(wiqlResult.workItemRelations);
 
       let workItemDetails:
-        | Array<{
-            id?: number;
-            rev?: number;
-            fields?: Record<string, unknown>;
-            url?: string;
-          }>
+        | WorkItemRow[]
+        | { fieldNames: string[]; rows: (unknown | null)[][] }
         | undefined;
       if (fetchFields !== undefined && workItems.length > 0) {
         const ids = workItems
@@ -417,12 +444,7 @@ export function registerWorkItemTools(
           .filter((id): id is number => id !== undefined);
         const fieldsParam = fetchFields.length > 0 ? fetchFields : undefined;
         const chunkSize = 200;
-        const fetched: Array<{
-          id?: number;
-          rev?: number;
-          fields?: Record<string, unknown>;
-          url?: string;
-        }> = [];
+        const fetched: WorkItemRow[] = [];
         for (let i = 0; i < ids.length; i += chunkSize) {
           const chunk = ids.slice(i, i + chunkSize);
           const items = await witApi.getWorkItems(
@@ -434,12 +456,7 @@ export function registerWorkItemTools(
             project,
           );
           for (const item of ensureArray(items)) {
-            const wi = item as {
-              id?: number;
-              rev?: number;
-              fields?: Record<string, unknown>;
-              url?: string;
-            };
+            const wi = item as WorkItemRow;
             fetched.push({
               id: wi.id ?? undefined,
               rev: wi.rev ?? undefined,
@@ -448,7 +465,8 @@ export function registerWorkItemTools(
             });
           }
         }
-        workItemDetails = fetched;
+        workItemDetails =
+          format === "rows" ? toRowsFormat(fetched, fetchFields) : fetched;
       }
 
       return {
@@ -973,6 +991,13 @@ export function registerWorkItemTools(
             "提供時自動批次取得工作項目詳細資料並回傳於 workItemDetails。" +
               "傳入空陣列表示取得所有欄位；傳入欄位清單則只取指定欄位。",
           ),
+        format: z
+          .enum(["objects", "rows"])
+          .optional()
+          .describe(
+            "workItemDetails 回傳格式：objects（預設）回傳物件陣列；rows 回傳 fieldNames + rows 二維陣列，" +
+              "筆數多（50 筆以上）時可省下大量重複欄位名稱 token。僅在提供 fetchFields 時有效。",
+          ),
       },
       outputSchema: queryWorkItemsOutputSchema,
     },
@@ -981,11 +1006,13 @@ export function registerWorkItemTools(
       queryId,
       top,
       fetchFields,
+      format,
     }: {
       project: string;
       queryId: string;
       top?: number;
       fetchFields?: string[];
+      format?: "objects" | "rows";
     }) => {
       const teamContext: CoreInterfaces.TeamContext = { project };
       const wiqlResult = await witApi.queryById(queryId, teamContext, undefined, top);
@@ -1005,7 +1032,8 @@ export function registerWorkItemTools(
       }>(wiqlResult.workItemRelations);
 
       let workItemDetails:
-        | Array<{ id?: number; rev?: number; fields?: Record<string, unknown>; url?: string }>
+        | WorkItemRow[]
+        | { fieldNames: string[]; rows: (unknown | null)[][] }
         | undefined;
 
       if (fetchFields !== undefined && workItems.length > 0) {
@@ -1014,12 +1042,12 @@ export function registerWorkItemTools(
           .filter((id): id is number => id !== undefined);
         const fieldsParam = fetchFields.length > 0 ? fetchFields : undefined;
         const chunkSize = 200;
-        const fetched: Array<{ id?: number; rev?: number; fields?: Record<string, unknown>; url?: string }> = [];
+        const fetched: WorkItemRow[] = [];
         for (let i = 0; i < ids.length; i += chunkSize) {
           const chunk = ids.slice(i, i + chunkSize);
           const items = await witApi.getWorkItems(chunk, fieldsParam, undefined, undefined, undefined, project);
           for (const item of ensureArray(items)) {
-            const wi = item as { id?: number; rev?: number; fields?: Record<string, unknown>; url?: string };
+            const wi = item as WorkItemRow;
             fetched.push({
               id: wi.id ?? undefined,
               rev: wi.rev ?? undefined,
@@ -1028,7 +1056,8 @@ export function registerWorkItemTools(
             });
           }
         }
-        workItemDetails = fetched;
+        workItemDetails =
+          format === "rows" ? toRowsFormat(fetched, fetchFields) : fetched;
       }
 
       return {

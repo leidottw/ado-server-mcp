@@ -406,6 +406,13 @@ const workItemTypeSchema = z
   .partial()
   .passthrough();
 
+const workItemRowsSchema = z
+  .object({
+    fieldNames: z.array(z.string()),
+    rows: z.array(z.array(z.unknown().nullable())),
+  })
+  .passthrough();
+
 /**
  * Azure DevOps WIQL query result.
  * Derived from azure-devops-node-api interfaces/WorkItemTrackingInterfaces.d.ts - WorkItemQueryResult
@@ -428,7 +435,9 @@ const workItemQueryResultSchema = z
           .partial(),
       )
       .optional(),
-    workItemDetails: z.array(workItemSchema).optional(),
+    workItemDetails: z
+      .union([z.array(workItemSchema), workItemRowsSchema])
+      .optional(),
   })
   .partial()
   .passthrough();
