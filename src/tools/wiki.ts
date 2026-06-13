@@ -12,7 +12,7 @@ import {
   normalizeAzureDevOpsDates,
   ensureArray,
 } from "../types/azureDevOps.js";
-import { deliver } from "../fileHandoff.js";
+import { deliver, readInputFile } from "../fileHandoff.js";
 
 const envSource =
   typeof Bun !== "undefined" && typeof Bun.env !== "undefined"
@@ -257,7 +257,8 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         project: z.string().min(1).describe("專案名稱或 ID"),
         wikiIdentifier: z.string().min(1).describe("Wiki ID 或 Wiki 名稱"),
         path: z.string().min(1).describe("頁面路徑，例如 /NewPage"),
-        content: z.string().describe("頁面 Markdown 內容"),
+        content: z.string().optional().describe("頁面 Markdown 內容（內容已存在於本機檔案時請改用 contentFile 以節省 output token）"),
+        contentFile: z.string().optional().describe("【優先使用】本機檔案絕對路徑；內容已在本機檔案時必須用此參數取代 content，工具直接讀檔，可大幅節省 output token"),
         branch: z
           .string()
           .optional()
@@ -270,21 +271,25 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       wikiIdentifier,
       path,
       content,
+      contentFile,
       branch,
     }: {
       project: string;
       wikiIdentifier: string;
       path: string;
-      content: string;
+      content?: string;
+      contentFile?: string;
       branch?: string;
     }) => {
+      const resolvedContent = contentFile ? readInputFile(contentFile) : content;
+      if (!resolvedContent) throw new Error("content 或 contentFile 必須提供其一");
       const encodedPath = encodeURIComponent(path);
       const versionSuffix = branch
         ? `&versionDescriptor.version=${encodeURIComponent(branch)}&versionDescriptor.versionType=branch`
         : "";
       const page = await wikiRestPut(
         `${project}/_apis/wiki/wikis/${wikiIdentifier}/pages?path=${encodedPath}${versionSuffix}`,
-        { content },
+        { content: resolvedContent },
       );
       return {
         content: [],
@@ -303,7 +308,8 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         project: z.string().min(1).describe("專案名稱或 ID"),
         wikiIdentifier: z.string().min(1).describe("Wiki ID 或 Wiki 名稱"),
         path: z.string().min(1).describe("頁面路徑"),
-        content: z.string().describe("更新後的 Markdown 內容"),
+        content: z.string().optional().describe("更新後的 Markdown 內容（內容已存在於本機檔案時請改用 contentFile 以節省 output token）"),
+        contentFile: z.string().optional().describe("【優先使用】本機檔案絕對路徑；內容已在本機檔案時必須用此參數取代 content，工具直接讀檔，可大幅節省 output token"),
         version: z
           .string()
           .optional()
@@ -320,16 +326,20 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       wikiIdentifier,
       path,
       content,
+      contentFile,
       version,
       branch,
     }: {
       project: string;
       wikiIdentifier: string;
       path: string;
-      content: string;
+      content?: string;
+      contentFile?: string;
       version?: string;
       branch?: string;
     }) => {
+      const resolvedContent = contentFile ? readInputFile(contentFile) : content;
+      if (!resolvedContent) throw new Error("content 或 contentFile 必須提供其一");
       const encodedPath = encodeURIComponent(path);
       const versionSuffix = branch
         ? `&versionDescriptor.version=${encodeURIComponent(branch)}&versionDescriptor.versionType=branch`
@@ -338,7 +348,7 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       const eTag = version ?? (await wikiRestGet(pageGetPath)).eTag ?? undefined;
       const page = await wikiRestPut(
         pageGetPath,
-        { content },
+        { content: resolvedContent },
         eTag,
       );
       return {

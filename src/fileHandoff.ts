@@ -85,6 +85,10 @@ function randomSuffix(): string {
     .padStart(4, "0");
 }
 
+export function readInputFile(filePath: string): string {
+  return fs.readFileSync(filePath, "utf-8");
+}
+
 export async function deliver(
   content: string,
   opts: {

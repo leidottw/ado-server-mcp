@@ -1,3 +1,4 @@
+import { readInputFile } from "../fileHandoff.js";
 import type { IGitApi } from "azure-devops-node-api/GitApi";
 import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
 import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
@@ -257,7 +258,8 @@ export function registerPullRequestTools(
           .min(1)
           .describe("目標分支名稱，例如 refs/heads/main"),
         title: z.string().min(1).describe("拉取請求標題"),
-        description: z.string().optional().describe("說明內容"),
+        description: z.string().optional().describe("說明內容（內容已存在於本機檔案時請改用 descriptionFile 以節省 output token）"),
+        descriptionFile: z.string().optional().describe("【優先使用】本機檔案絕對路徑；說明內容已在本機檔案時必須用此參數取代 description，工具直接讀檔，可大幅節省 output token"),
         isDraft: z.boolean().optional().describe("是否建立為草稿 PR"),
         reviewers: z
           .array(z.string())
@@ -272,6 +274,7 @@ export function registerPullRequestTools(
       targetRefName,
       title,
       description,
+      descriptionFile,
       isDraft,
       reviewers,
     }: {
@@ -280,14 +283,16 @@ export function registerPullRequestTools(
       targetRefName: string;
       title: string;
       description?: string;
+      descriptionFile?: string;
       isDraft?: boolean;
       reviewers?: string[];
     }) => {
+      const resolvedDescription = descriptionFile ? readInputFile(descriptionFile) : description;
       const gitPullRequest: GitInterfaces.GitPullRequest = {
         sourceRefName,
         targetRefName,
         title,
-        description: description ?? "",
+        description: resolvedDescription ?? "",
         isDraft: isDraft ?? false,
         reviewers: reviewers?.map((id) => ({ id })) ?? [],
       };
@@ -413,7 +418,8 @@ export function registerPullRequestTools(
         repositoryId: z.string().min(1).describe("儲存庫 ID 或名稱"),
         pullRequestId: z.number().int().positive().describe("拉取請求編號"),
         title: z.string().optional().describe("新標題"),
-        description: z.string().optional().describe("新說明"),
+        description: z.string().optional().describe("新說明（內容已存在於本機檔案時請改用 descriptionFile 以節省 output token）"),
+        descriptionFile: z.string().optional().describe("【優先使用】本機檔案絕對路徑；說明內容已在本機檔案時必須用此參數取代 description，工具直接讀檔，可大幅節省 output token"),
         status: z
           .enum(["active", "abandoned", "completed"])
           .optional()
@@ -439,6 +445,7 @@ export function registerPullRequestTools(
       pullRequestId,
       title,
       description,
+      descriptionFile,
       status,
       isDraft,
       mergeStrategy,
@@ -449,15 +456,17 @@ export function registerPullRequestTools(
       pullRequestId: number;
       title?: string;
       description?: string;
+      descriptionFile?: string;
       status?: "active" | "abandoned" | "completed";
       isDraft?: boolean;
       mergeStrategy?: "noFastForward" | "squash" | "rebase" | "rebaseMerge";
       deleteSourceBranch?: boolean;
       mergeCommitMessage?: string;
     }) => {
+      const resolvedDescription = descriptionFile ? readInputFile(descriptionFile) : description;
       const body: Partial<GitInterfaces.GitPullRequest> = {};
       if (title !== undefined) body.title = title;
-      if (description !== undefined) body.description = description;
+      if (resolvedDescription !== undefined) body.description = resolvedDescription;
       if (status !== undefined) body.status = parseGitPullRequestStatus(status);
       if (isDraft !== undefined) body.isDraft = isDraft;
 

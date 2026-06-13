@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- `contentFile` 參數：`create_wiki_page`、`update_wiki_page` 可改傳本機檔案路徑取代 inline `content`，節省 output token
+- `descriptionFile` 參數：`create_pull_request`、`update_pull_request` 可改傳本機檔案路徑取代 inline `description`，節省 output token
+
 ## [0.9.0] - 2026-06-13
 
 此版本包含四項 token 優化改進：
