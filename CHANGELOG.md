@@ -25,7 +25,7 @@
 
 ### Added
 
-- 新增 `src/fileHandoff.ts` 共用模組：大型內容超過 `ADO_MCP_INLINE_LIMIT`（預設 20000 字元）時自動寫入暫存檔（`$TMPDIR/ado-mcp/`）並回傳路徑 + preview，讓 agent 用 Read/Grep 工具按需讀取，大幅節省 token
+- 新增 `src/fileHandoff.ts` 共用模組：大型內容超過 `ADO_MCP_INLINE_LIMIT`（預設 10000 字元）時自動寫入暫存檔（`$TMPDIR/ado-mcp/`）並回傳路徑 + preview，讓 agent 用 Read/Grep 工具按需讀取，大幅節省 token
   - 環境變數 `ADO_MCP_OUTPUT_DIR`、`ADO_MCP_INLINE_LIMIT`、`ADO_MCP_FILE_HANDOFF`（設為 `off` 可停用）
   - 適用工具各新增 `output: "inline" | "file" | "auto"` 參數（預設 `auto`）：`get_build_logs`（有 logId 且無 grep）、`get_pipeline_definition_yaml`、`get_wiki_page`、`get_pull_request_diff`、`get_file_content`、`query_work_items` / `run_query`（有 fetchFields）
 

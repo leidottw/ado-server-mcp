@@ -5,7 +5,7 @@ import * as os from "os";
 const OUTPUT_DIR =
   process.env["ADO_MCP_OUTPUT_DIR"] ?? path.join(os.tmpdir(), "ado-mcp");
 const INLINE_LIMIT = parseInt(
-  process.env["ADO_MCP_INLINE_LIMIT"] ?? "20000",
+  process.env["ADO_MCP_INLINE_LIMIT"] ?? "10000",
   10,
 );
 const FILE_HANDOFF_ENABLED =
