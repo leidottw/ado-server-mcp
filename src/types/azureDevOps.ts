@@ -975,6 +975,8 @@ export const createWikiPageOutputSchema = wikiPageSchema;
 
 export const updateWikiPageOutputSchema = wikiPageSchema;
 
+export const deleteWikiPageOutputSchema = wikiPageSchema;
+
 export const searchWikiOutputSchema = z
   .object({
     count: z.number().optional(),

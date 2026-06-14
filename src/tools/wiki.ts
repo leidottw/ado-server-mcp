@@ -8,6 +8,7 @@ import {
   listWikiPagesOutputSchema,
   createWikiPageOutputSchema,
   updateWikiPageOutputSchema,
+  deleteWikiPageOutputSchema,
   searchWikiOutputSchema,
   normalizeAzureDevOpsDates,
   ensureArray,
@@ -66,6 +67,20 @@ async function wikiRestPut(
   }
   const data = (await resp.json()) as JsonObject;
   return (data.page as JsonObject) ?? data;
+}
+
+async function wikiRestDelete(path: string): Promise<JsonObject> {
+  const sep = path.includes("?") ? "&" : "?";
+  const url = `${ADO_BASE_URL}/${path}${sep}api-version=7.0`;
+  const resp = await fetch(url, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`ADO Wiki DELETE 失敗 ${resp.status}: ${text}`);
+  }
+  return resp.json() as Promise<JsonObject>;
 }
 
 async function wikiRestPost(path: string, body: unknown): Promise<JsonObject> {
@@ -350,6 +365,57 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         pageGetPath,
         { content: resolvedContent },
         eTag,
+      );
+      return {
+        content: [],
+        structuredContent: normalizeAzureDevOpsDates(page),
+      };
+    },
+  );
+
+  // ── delete_wiki_page ───────────────────────────────────────────────────────
+  server.registerTool(
+    "delete_wiki_page",
+    {
+      description: "刪除 Wiki 中的指定頁面。CodeWiki 必須提供 branch。",
+      inputSchema: {
+        project: z.string().min(1).describe("專案名稱或 ID"),
+        wikiIdentifier: z.string().min(1).describe("Wiki ID 或 Wiki 名稱"),
+        path: z.string().min(1).describe("頁面路徑"),
+        branch: z
+          .string()
+          .optional()
+          .describe("目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）"),
+        comment: z
+          .string()
+          .optional()
+          .describe("刪除時的 commit 說明（選填）"),
+      },
+      outputSchema: deleteWikiPageOutputSchema,
+    },
+    async ({
+      project,
+      wikiIdentifier,
+      path,
+      branch,
+      comment,
+    }: {
+      project: string;
+      wikiIdentifier: string;
+      path: string;
+      branch?: string;
+      comment?: string;
+    }) => {
+      const encodedPath = encodeURIComponent(path);
+      let query = `path=${encodedPath}`;
+      if (branch) {
+        query += `&versionDescriptor.version=${encodeURIComponent(branch)}&versionDescriptor.versionType=branch`;
+      }
+      if (comment) {
+        query += `&comment=${encodeURIComponent(comment)}`;
+      }
+      const page = await wikiRestDelete(
+        `${project}/_apis/wiki/wikis/${wikiIdentifier}/pages?${query}`,
       );
       return {
         content: [],
