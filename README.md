@@ -35,7 +35,7 @@
 
 - `get_pull_requests` - 取得指定專案下的 Git 拉取請求；`detail: "minimal"`（預設）只回識別與狀態欄位，`full` 回完整物件
 - `get_pull_request_details` - 取得單一拉取請求詳細資訊（含所有討論串）
-- `create_pull_request` - 建立新的拉取請求
+- `create_pull_request` - 建立新的拉取請求；`descriptionFile` 傳本機路徑可節省 output token
 - `create_pull_request_thread` - 在拉取請求上建立新討論串（支援錨定至特定程式碼行）
 - `create_pull_request_thread_comment` - 在拉取請求的現有討論串中新增留言
 - `get_pull_request_threads` - 取得拉取請求的所有討論串；`detail: "minimal"`（預設）截斷長 comment 並精簡 identity，`full` 回完整原文
@@ -43,7 +43,7 @@
 - `get_pull_request_statuses` - 取得拉取請求的 CI/build 狀態清單
 - `get_pull_request_diff` - 取得拉取請求的 unified diff（自動略過二進位檔與超過 1 MB 的檔案）；`output` 控制大型 diff 是否寫入暫存檔
 - `get_pull_request_work_items` - 取得拉取請求關聯的工作項目清單
-- `update_pull_request` - 更新拉取請求（標題、說明、狀態、草稿模式、合併策略）
+- `update_pull_request` - 更新拉取請求（標題、說明、狀態、草稿模式、合併策略）；`descriptionFile` 傳本機路徑可節省 output token
 - `update_pull_request_reviewer` - 設定或更新拉取請求的審查者投票（核准、拒絕等）
 - `update_pull_request_thread` - 更新拉取請求討論串的狀態（例如標記為已解決）
 
@@ -82,8 +82,9 @@
 - `get_wikis` - 列出 Collection 或指定專案下所有 Wiki
 - `get_wiki_page` - 取得 Wiki 指定頁面的內容與中繼資料；`output` 控制大型頁面是否寫入暫存檔
 - `list_wiki_pages` - 取得 Wiki 頁面樹狀結構（支援 recursionLevel）；`detail: "minimal"`（預設）不含頁面內容，`full` 回完整 Markdown
-- `create_wiki_page` - 在指定 Wiki 中建立新頁面或子頁面（CodeWiki 須指定 branch）
-- `update_wiki_page` - 更新 Wiki 現有頁面內容（自動取得 ETag，無需手動傳入）
+- `create_wiki_page` - 在指定 Wiki 中建立新頁面或子頁面（CodeWiki 須指定 branch）；`contentFile` 傳本機路徑可節省 output token
+- `update_wiki_page` - 更新 Wiki 現有頁面內容（自動取得 ETag，無需手動傳入）；`contentFile` 傳本機路徑可節省 output token
+- `delete_wiki_page` - 刪除 Wiki 指定頁面（CodeWiki 須指定 branch）
 - `search_wiki` - 依關鍵字全文搜尋 Wiki 頁面（project 參數限填名稱，不支援 ID）
 
 ## 需求條件
