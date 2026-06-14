@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-14
+
 ### Added
 
 - `contentFile` 參數：`create_wiki_page`、`update_wiki_page` 可改傳本機檔案路徑取代 inline `content`，節省 output token
