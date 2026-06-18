@@ -9,6 +9,8 @@
   "scripts": {
     "build": "bun build.ts",
     "start": "bun run ./src/index.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "prepare": "bun run build"
   },
   "devDependencies": {
@@ -16,8 +18,10 @@
     "@types/bun": "^1.3.14",
     "@types/diff": "^8.0.0",
     "@types/node": "^25.9.1",
+    "eslint": "^10.5.0",
     "prettier": "^3.8.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.61.1"
   },
   "peerDependencies": {
     "typescript": "^5"
