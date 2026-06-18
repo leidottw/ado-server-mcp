@@ -8,9 +8,11 @@
   },
   "scripts": {
     "build": "bun build.ts",
-    "start": "bun run ./src/index.ts"
+    "start": "bun run ./src/index.ts",
+    "prepare": "bun run build"
   },
   "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
     "@types/bun": "^1.3.14",
     "@types/diff": "^8.0.0",
     "@types/node": "^25.9.1",
