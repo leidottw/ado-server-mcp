@@ -11,6 +11,7 @@
     "start": "bun run ./src/index.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "prepare": "bun run build"
   },
   "devDependencies": {
