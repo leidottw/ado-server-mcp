@@ -1,6 +1,6 @@
 import * as fs from "fs";
-import * as path from "path";
 import * as os from "os";
+import * as path from "path";
 
 const OUTPUT_DIR =
   process.env["ADO_MCP_OUTPUT_DIR"] ?? path.join(os.tmpdir(), "ado-mcp");

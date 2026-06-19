@@ -1,5 +1,5 @@
-import { z } from "zod";
 import * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
+import { z } from "zod";
 
 // ─── File Handoff Schema ──────────────────────────────────────────────────────
 
@@ -774,14 +774,18 @@ export const getPipelineDefinitionOutputSchema = z
   .passthrough();
 
 export const getPipelineDefinitionYamlOutputSchema = z
-  .object({ yaml: z.string().optional(), outputFile: outputFileSchema.optional() })
+  .object({
+    yaml: z.string().optional(),
+    outputFile: outputFileSchema.optional(),
+  })
   .passthrough();
 
 // ─── PR Review Schemas ─────────────────────────────────────────────────────────
 
 export const updatePrReviewerOutputSchema = identityRefWithVoteSchema;
 
-export const createPullRequestThreadCommentOutputSchema = pullRequestCommentOutputSchema;
+export const createPullRequestThreadCommentOutputSchema =
+  pullRequestCommentOutputSchema;
 
 export const updatePrThreadOutputSchema = pullRequestThreadOutputSchemaInternal;
 
@@ -905,7 +909,9 @@ const wikiV2Schema = z
     remoteUrl: z.string(),
     url: z.string(),
     isDisabled: z.boolean(),
-    versions: z.array(z.object({ version: z.string() }).passthrough()).optional(),
+    versions: z
+      .array(z.object({ version: z.string() }).passthrough())
+      .optional(),
     properties: z.record(z.string(), z.string()).optional(),
   })
   .partial()
@@ -1017,9 +1023,7 @@ export const getFileContentOutputSchema = z
     content: z.string().optional(),
     outputFile: outputFileSchema.optional(),
     totalLines: z.number(),
-    returnedRange: z
-      .object({ start: z.number(), end: z.number() })
-      .optional(),
+    returnedRange: z.object({ start: z.number(), end: z.number() }).optional(),
   })
   .passthrough();
 
@@ -1028,7 +1032,10 @@ const branchItemSchema = z
     name: z.string().optional(),
     objectId: z.string().optional(),
     creator: z
-      .object({ displayName: z.string().optional(), uniqueName: z.string().optional() })
+      .object({
+        displayName: z.string().optional(),
+        uniqueName: z.string().optional(),
+      })
       .optional(),
     isDefault: z.boolean().optional(),
   })

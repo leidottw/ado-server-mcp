@@ -1,20 +1,22 @@
-import { readInputFile } from "../fileHandoff.js";
 import type { IGitApi } from "azure-devops-node-api/GitApi";
 import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
-import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
-import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
+import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
 import * as z from "zod";
+
+import { readInputFile } from "../fileHandoff.js";
 import {
-  ensureArray,
-  normalizeAzureDevOpsDates,
-  createPullRequestThreadOutputSchema,
-  createPullRequestThreadCommentOutputSchema,
   createPullRequestOutputSchema,
+  createPullRequestThreadCommentOutputSchema,
+  createPullRequestThreadOutputSchema,
+  ensureArray,
   getPullRequestChangesOutputSchema,
-  getPullRequestThreadsOutputSchema,
   getPullRequestStatusesOutputSchema,
+  getPullRequestThreadsOutputSchema,
   getPullRequestWorkItemsOutputSchema,
+  normalizeAzureDevOpsDates,
   pullRequestDetailOutputSchema,
   pullRequestSummaryOutputSchema,
   pullRequestThreadOutputSchema,
@@ -49,7 +51,8 @@ export function registerPullRequestTools(
   server.registerTool(
     "get_repositories",
     {
-      description: "列出指定專案內的 Git 儲存庫。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "列出指定專案內的 Git 儲存庫。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
       },
@@ -248,7 +251,12 @@ export function registerPullRequestTools(
     {
       description: "建立新的拉取請求",
       inputSchema: {
-        repositoryId: z.string().min(1).describe("儲存庫的 GUID（不支援名稱），可透過 list_repositories 取得"),
+        repositoryId: z
+          .string()
+          .min(1)
+          .describe(
+            "儲存庫的 GUID（不支援名稱），可透過 list_repositories 取得",
+          ),
         sourceRefName: z
           .string()
           .min(1)
@@ -258,8 +266,18 @@ export function registerPullRequestTools(
           .min(1)
           .describe("目標分支名稱，例如 refs/heads/main"),
         title: z.string().min(1).describe("拉取請求標題"),
-        description: z.string().optional().describe("說明內容（內容已存在於本機檔案時請改用 descriptionFile 以節省 output token）"),
-        descriptionFile: z.string().optional().describe("【優先使用】本機檔案絕對路徑；說明內容已在本機檔案時必須用此參數取代 description，工具直接讀檔，可大幅節省 output token"),
+        description: z
+          .string()
+          .optional()
+          .describe(
+            "說明內容（內容已存在於本機檔案時請改用 descriptionFile 以節省 output token）",
+          ),
+        descriptionFile: z
+          .string()
+          .optional()
+          .describe(
+            "【優先使用】本機檔案絕對路徑；說明內容已在本機檔案時必須用此參數取代 description，工具直接讀檔，可大幅節省 output token",
+          ),
         isDraft: z.boolean().optional().describe("是否建立為草稿 PR"),
         reviewers: z
           .array(z.string())
@@ -287,7 +305,9 @@ export function registerPullRequestTools(
       isDraft?: boolean;
       reviewers?: string[];
     }) => {
-      const resolvedDescription = descriptionFile ? readInputFile(descriptionFile) : description;
+      const resolvedDescription = descriptionFile
+        ? readInputFile(descriptionFile)
+        : description;
       const gitPullRequest: GitInterfaces.GitPullRequest = {
         sourceRefName,
         targetRefName,
@@ -329,7 +349,9 @@ export function registerPullRequestTools(
           .int()
           .positive()
           .optional()
-          .describe("錨定的新檔行號（來自 unified diff 推算，需同時提供 filePath）"),
+          .describe(
+            "錨定的新檔行號（來自 unified diff 推算，需同時提供 filePath）",
+          ),
         status: z
           .enum([
             "active",
@@ -412,14 +434,24 @@ export function registerPullRequestTools(
     {
       description:
         "更新拉取請求（標題、說明、狀態、草稿模式）。" +
-        "設定 status: \"completed\" 時可搭配 mergeStrategy、deleteSourceBranch、mergeCommitMessage 控制合併行為；" +
+        '設定 status: "completed" 時可搭配 mergeStrategy、deleteSourceBranch、mergeCommitMessage 控制合併行為；' +
         "其他狀態下這些參數會被忽略並於回傳訊息中說明。",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID 或名稱"),
         pullRequestId: z.number().int().positive().describe("拉取請求編號"),
         title: z.string().optional().describe("新標題"),
-        description: z.string().optional().describe("新說明（內容已存在於本機檔案時請改用 descriptionFile 以節省 output token）"),
-        descriptionFile: z.string().optional().describe("【優先使用】本機檔案絕對路徑；說明內容已在本機檔案時必須用此參數取代 description，工具直接讀檔，可大幅節省 output token"),
+        description: z
+          .string()
+          .optional()
+          .describe(
+            "新說明（內容已存在於本機檔案時請改用 descriptionFile 以節省 output token）",
+          ),
+        descriptionFile: z
+          .string()
+          .optional()
+          .describe(
+            "【優先使用】本機檔案絕對路徑；說明內容已在本機檔案時必須用此參數取代 description，工具直接讀檔，可大幅節省 output token",
+          ),
         status: z
           .enum(["active", "abandoned", "completed"])
           .optional()
@@ -463,24 +495,35 @@ export function registerPullRequestTools(
       deleteSourceBranch?: boolean;
       mergeCommitMessage?: string;
     }) => {
-      const resolvedDescription = descriptionFile ? readInputFile(descriptionFile) : description;
+      const resolvedDescription = descriptionFile
+        ? readInputFile(descriptionFile)
+        : description;
       const body: Partial<GitInterfaces.GitPullRequest> = {};
       if (title !== undefined) body.title = title;
-      if (resolvedDescription !== undefined) body.description = resolvedDescription;
+      if (resolvedDescription !== undefined)
+        body.description = resolvedDescription;
       if (status !== undefined) body.status = parseGitPullRequestStatus(status);
       if (isDraft !== undefined) body.isDraft = isDraft;
 
       if (status === "completed") {
-        const pr = await gitApi.getPullRequest(repositoryId, pullRequestId, undefined);
+        const pr = await gitApi.getPullRequest(
+          repositoryId,
+          pullRequestId,
+          undefined,
+        );
         if (pr?.lastMergeSourceCommit) {
           body.lastMergeSourceCommit = pr.lastMergeSourceCommit;
         }
         const completionOptions: Record<string, unknown> = {};
-        if (mergeStrategy !== undefined) completionOptions.mergeStrategy = mergeStrategy;
-        if (deleteSourceBranch !== undefined) completionOptions.deleteSourceBranch = deleteSourceBranch;
-        if (mergeCommitMessage !== undefined) completionOptions.mergeCommitMessage = mergeCommitMessage;
+        if (mergeStrategy !== undefined)
+          completionOptions.mergeStrategy = mergeStrategy;
+        if (deleteSourceBranch !== undefined)
+          completionOptions.deleteSourceBranch = deleteSourceBranch;
+        if (mergeCommitMessage !== undefined)
+          completionOptions.mergeCommitMessage = mergeCommitMessage;
         if (Object.keys(completionOptions).length > 0) {
-          body.completionOptions = completionOptions as GitInterfaces.GitPullRequestCompletionOptions;
+          body.completionOptions =
+            completionOptions as GitInterfaces.GitPullRequestCompletionOptions;
         }
       }
 
@@ -498,7 +541,10 @@ export function registerPullRequestTools(
           status: response?.status ?? undefined,
           url: response?.url ?? undefined,
           note:
-            status !== "completed" && (mergeStrategy !== undefined || deleteSourceBranch !== undefined || mergeCommitMessage !== undefined)
+            status !== "completed" &&
+            (mergeStrategy !== undefined ||
+              deleteSourceBranch !== undefined ||
+              mergeCommitMessage !== undefined)
               ? "mergeStrategy、deleteSourceBranch、mergeCommitMessage 僅在 status: completed 時有效，本次已忽略。"
               : undefined,
         },
@@ -509,15 +555,10 @@ export function registerPullRequestTools(
   server.registerTool(
     "update_pull_request_reviewer",
     {
-      description:
-        "設定或更新拉取請求的審查者投票（核准、拒絕等）",
+      description: "設定或更新拉取請求的審查者投票（核准、拒絕等）",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
-        pullRequestId: z
-          .number()
-          .int()
-          .positive()
-          .describe("拉取請求編號"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
         reviewerId: z.string().min(1).describe("審查者的身份 ID"),
         vote: z
           .union([
@@ -553,7 +594,10 @@ export function registerPullRequestTools(
       );
       return {
         content: [],
-        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<string, unknown>,
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<
+          string,
+          unknown
+        >,
       };
     },
   );
@@ -564,11 +608,7 @@ export function registerPullRequestTools(
       description: "在拉取請求的現有討論串中新增留言",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
-        pullRequestId: z
-          .number()
-          .int()
-          .positive()
-          .describe("拉取請求編號"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
         threadId: z.number().int().positive().describe("討論串 ID"),
         content: z.string().min(1).describe("留言內容"),
       },
@@ -598,7 +638,10 @@ export function registerPullRequestTools(
       );
       return {
         content: [],
-        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<string, unknown>,
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<
+          string,
+          unknown
+        >,
       };
     },
   );
@@ -609,11 +652,7 @@ export function registerPullRequestTools(
       description: "更新拉取請求評論串的狀態（例如標記為已解決）",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
-        pullRequestId: z
-          .number()
-          .int()
-          .positive()
-          .describe("拉取請求編號"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
         threadId: z.number().int().positive().describe("評論串 ID"),
         status: z
           .enum([
@@ -669,7 +708,10 @@ export function registerPullRequestTools(
       );
       return {
         content: [],
-        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<string, unknown>,
+        structuredContent: normalizeAzureDevOpsDates(response ?? {}) as Record<
+          string,
+          unknown
+        >,
       };
     },
   );
@@ -677,15 +719,10 @@ export function registerPullRequestTools(
   server.registerTool(
     "get_pull_request_changes",
     {
-      description:
-        "取得拉取請求的檔案變更清單（取最新一次 iteration 的變更）",
+      description: "取得拉取請求的檔案變更清單（取最新一次 iteration 的變更）",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
-        pullRequestId: z
-          .number()
-          .int()
-          .positive()
-          .describe("拉取請求編號"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
         top: z
           .number()
           .int()
@@ -748,11 +785,7 @@ export function registerPullRequestTools(
       description: "取得拉取請求的所有討論串",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
-        pullRequestId: z
-          .number()
-          .int()
-          .positive()
-          .describe("拉取請求編號"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
         detail: z
           .enum(["minimal", "full"])
           .optional()
@@ -810,9 +843,7 @@ export function registerPullRequestTools(
                   ? { displayName: raw.author.displayName ?? undefined }
                   : undefined,
                 content:
-                  content.length > 300
-                    ? content.slice(0, 300) + "…"
-                    : content,
+                  content.length > 300 ? content.slice(0, 300) + "…" : content,
               };
             }),
           })),
@@ -827,11 +858,7 @@ export function registerPullRequestTools(
       description: "取得拉取請求的 CI/build 狀態清單",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
-        pullRequestId: z
-          .number()
-          .int()
-          .positive()
-          .describe("拉取請求編號"),
+        pullRequestId: z.number().int().positive().describe("拉取請求編號"),
       },
       outputSchema: getPullRequestStatusesOutputSchema,
     },
@@ -862,7 +889,7 @@ export function registerPullRequestTools(
       description:
         "取得拉取請求關聯的工作項目清單（含摘要資訊）。" +
         "若需反向建立工作項目 → PR 的關聯，請在 update_work_item 的 addRelations 中使用：" +
-        "rel: \"ArtifactLink\"，url: \"vstfs:///Git/PullRequestId/{projectId}%2F{repositoryId}%2F{pullRequestId}\"，attributes: { name: \"Pull Request\" }。",
+        'rel: "ArtifactLink"，url: "vstfs:///Git/PullRequestId/{projectId}%2F{repositoryId}%2F{pullRequestId}"，attributes: { name: "Pull Request" }。',
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID"),
         pullRequestId: z.number().int().positive().describe("拉取請求編號"),
@@ -904,7 +931,14 @@ export function registerPullRequestTools(
         "System.WorkItemType",
       ];
       const items = witApi
-        ? await witApi.getWorkItems(ids, fields, undefined, undefined, undefined, project)
+        ? await witApi.getWorkItems(
+            ids,
+            fields,
+            undefined,
+            undefined,
+            undefined,
+            project,
+          )
         : [];
 
       return {

@@ -1,8 +1,12 @@
-import { getPersonalAccessTokenHandler, WebApi } from "azure-devops-node-api";
 import type { IBuildApi } from "azure-devops-node-api/BuildApi";
-import type { IWorkApi } from "azure-devops-node-api/WorkApi";
-import type { IWikiApi } from "azure-devops-node-api/WikiApi";
+import type { ICoreApi } from "azure-devops-node-api/CoreApi";
+import type { IGitApi } from "azure-devops-node-api/GitApi";
 import type { ConnectionData } from "azure-devops-node-api/interfaces/LocationsInterfaces";
+import type { IWikiApi } from "azure-devops-node-api/WikiApi";
+import type { IWorkApi } from "azure-devops-node-api/WorkApi";
+import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
+
+import { getPersonalAccessTokenHandler, WebApi } from "azure-devops-node-api";
 import { z } from "zod";
 
 const envSource =
@@ -31,9 +35,9 @@ if (env.NODE_TLS_REJECT_UNAUTHORIZED === "0") {
 }
 
 export interface AzureDevOpsClient {
-  core: any;
-  git: any;
-  wit: any;
+  core: ICoreApi;
+  git: IGitApi;
+  wit: IWorkItemTrackingApi;
   build: IBuildApi;
   work: IWorkApi;
   wiki: IWikiApi;
@@ -51,7 +55,15 @@ export async function getAzureDevOpsClient(): Promise<AzureDevOpsClient> {
     connection.getWorkApi(),
     connection.getWikiApi(),
   ]);
-  return { core, git, wit, build, work, wiki, connect: () => connection.connect() };
+  return {
+    core,
+    git,
+    wit,
+    build,
+    work,
+    wiki,
+    connect: () => connection.connect(),
+  };
 }
 
 function buildBaseUrl(rawUrl: string): string {

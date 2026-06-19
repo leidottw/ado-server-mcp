@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+import { version } from "../package.json";
 import { getAzureDevOpsClient } from "./client.js";
 import { registerGitTools } from "./tools/git.js";
 import { registerIterationTools } from "./tools/iterations.js";
@@ -10,7 +11,6 @@ import { registerProjectTools } from "./tools/projects.js";
 import { registerPullRequestTools } from "./tools/pullRequests.js";
 import { registerWikiTools } from "./tools/wiki.js";
 import { registerWorkItemTools } from "./tools/workItems.js";
-import { version } from "../package.json";
 
 async function main(): Promise<void> {
   const client = await getAzureDevOpsClient();
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
   registerProjectTools(mcpServer, client.core, client.connect);
   registerPipelineTools(mcpServer, client.build, client.git);
   registerWikiTools(mcpServer, client.wiki);
-  registerGitTools(mcpServer, client.git, client.wit);
+  registerGitTools(mcpServer, client.git);
 
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);

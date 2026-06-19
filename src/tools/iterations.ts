@@ -1,15 +1,19 @@
-import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
+import type { TeamSettingsIteration } from "azure-devops-node-api/interfaces/WorkInterfaces";
+import type { WorkItemClassificationNode } from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
 import type { IWorkApi } from "azure-devops-node-api/WorkApi";
-import { TreeStructureGroup } from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
+import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { TreeStructureGroup } from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
 import * as z from "zod";
+
 import {
-  ensureArray,
-  normalizeAzureDevOpsDates,
   classificationNodeOutputSchema,
+  ensureArray,
   listIterationsOutputSchema,
-  teamIterationOutputSchema,
   listTeamIterationsOutputSchema,
+  normalizeAzureDevOpsDates,
+  teamIterationOutputSchema,
 } from "../types/azureDevOps.js";
 
 export function registerIterationTools(
@@ -146,7 +150,7 @@ export function registerIterationTools(
       if (Object.keys(attributes).length > 0) node["attributes"] = attributes;
 
       const result = await witApi.updateClassificationNode(
-        node as any,
+        node as WorkItemClassificationNode,
         project,
         TreeStructureGroup.Iterations,
         path,
@@ -177,13 +181,13 @@ export function registerIterationTools(
         type: z
           .enum(["iterations", "areas"])
           .default("iterations")
-          .describe("節點類型：iterations（反覆項目）或 areas（區域），預設 iterations"),
+          .describe(
+            "節點類型：iterations（反覆項目）或 areas（區域），預設 iterations",
+          ),
         path: z
           .string()
           .optional()
-          .describe(
-            "查詢起始路徑（相對於專案根節點），留空則從根節點開始",
-          ),
+          .describe("查詢起始路徑（相對於專案根節點），留空則從根節點開始"),
         depth: z
           .number()
           .int()
@@ -252,7 +256,7 @@ export function registerIterationTools(
     }) => {
       const teamContext = { project, team };
       const result = await workApi.postTeamIteration(
-        { id: iterationId } as any,
+        { id: iterationId } as TeamSettingsIteration,
         teamContext,
       );
       return {
@@ -271,7 +275,8 @@ export function registerIterationTools(
   server.registerTool(
     "list_team_iterations",
     {
-      description: "查詢 Team 目前已指派的 Iteration 清單，含 ID、名稱、日期與時間框架。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "查詢 Team 目前已指派的 Iteration 清單，含 ID、名稱、日期與時間框架。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         team: z.string().min(1).describe("Team 名稱或 ID"),
@@ -296,20 +301,24 @@ export function registerIterationTools(
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
-          iterations: ensureArray(results).map((iter: any) => ({
-            id: iter?.id ?? undefined,
-            name: iter?.name ?? undefined,
-            path: iter?.path ?? undefined,
-            attributes: iter?.attributes ?? undefined,
-            url: iter?.url ?? undefined,
-          })),
+          iterations: ensureArray<TeamSettingsIteration>(results).map(
+            (iter) => ({
+              id: iter?.id ?? undefined,
+              name: iter?.name ?? undefined,
+              path: iter?.path ?? undefined,
+              attributes: iter?.attributes ?? undefined,
+              url: iter?.url ?? undefined,
+            }),
+          ),
         }),
       };
     },
   );
 }
 
-function mapClassificationNode(node: any): Record<string, unknown> {
+function mapClassificationNode(
+  node: WorkItemClassificationNode | undefined,
+): Record<string, unknown> {
   if (!node) return {};
   return {
     id: node.id ?? undefined,
@@ -320,7 +329,9 @@ function mapClassificationNode(node: any): Record<string, unknown> {
     path: node.path ?? undefined,
     attributes: node.attributes ?? undefined,
     children: node.children
-      ? ensureArray(node.children).map(mapClassificationNode)
+      ? ensureArray<WorkItemClassificationNode>(node.children).map(
+          mapClassificationNode,
+        )
       : undefined,
     url: node.url ?? undefined,
   };

@@ -33,13 +33,15 @@ describe("ensureRecord", () => {
 describe("normalizeAzureDevOpsDates", () => {
   test("將 Date 轉為 ISO 字串", () => {
     const date = new Date("2026-01-01T00:00:00.000Z");
-    expect(normalizeAzureDevOpsDates(date)).toBe("2026-01-01T00:00:00.000Z");
+    expect(normalizeAzureDevOpsDates<unknown>(date)).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
   });
 
   test("遞迴處理巢狀物件與陣列中的 Date", () => {
     const date = new Date("2026-01-01T00:00:00.000Z");
     const input = { createdDate: date, items: [{ closedDate: date }] };
-    expect(normalizeAzureDevOpsDates(input)).toEqual({
+    expect(normalizeAzureDevOpsDates<unknown>(input)).toEqual({
       createdDate: "2026-01-01T00:00:00.000Z",
       items: [{ closedDate: "2026-01-01T00:00:00.000Z" }],
     });

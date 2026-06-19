@@ -1,9 +1,11 @@
 import type { ICoreApi } from "azure-devops-node-api/CoreApi";
-import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 import type * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
+import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 import type { ConnectionData } from "azure-devops-node-api/interfaces/LocationsInterfaces";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
+
 import {
   ensureArray,
   getMeOutputSchema,
@@ -22,7 +24,8 @@ export function registerProjectTools(
   server.registerTool(
     "get_me",
     {
-      description: "取得目前 PAT Token 所對應的使用者資訊（顯示名稱、帳號、ID）。",
+      description:
+        "取得目前 PAT Token 所對應的使用者資訊（顯示名稱、帳號、ID）。",
       inputSchema: {},
       outputSchema: getMeOutputSchema,
     },
@@ -34,7 +37,9 @@ export function registerProjectTools(
         structuredContent: {
           id: user?.id,
           displayName: user?.providerDisplayName,
-          uniqueName: (user?.properties as Record<string, { $value: string }> | undefined)?.["Account"]?.$value,
+          uniqueName: (
+            user?.properties as Record<string, { $value: string }> | undefined
+          )?.["Account"]?.$value,
         },
       };
     },
@@ -42,7 +47,8 @@ export function registerProjectTools(
   server.registerTool(
     "list_projects",
     {
-      description: "列出 Collection 中可存取的專案清單。若本次對話中已呼叫過此工具，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "列出 Collection 中可存取的專案清單。若本次對話中已呼叫過此工具，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         stateFilter: z
           .enum([
@@ -99,7 +105,8 @@ export function registerProjectTools(
   server.registerTool(
     "get_project_teams",
     {
-      description: "取得指定專案底下的團隊列表。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "取得指定專案底下的團隊列表。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         mine: z.boolean().optional().describe("僅回傳我所屬的團隊"),
@@ -144,7 +151,8 @@ export function registerProjectTools(
   server.registerTool(
     "get_team_members",
     {
-      description: "取得特定團隊的成員列表。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "取得特定團隊的成員列表。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         teamId: z.string().min(1).describe("團隊 ID"),
@@ -202,7 +210,8 @@ export function registerProjectTools(
   server.registerTool(
     "get_project",
     {
-      description: "取得單一專案的詳細資訊。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "取得單一專案的詳細資訊。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
       },
@@ -232,7 +241,8 @@ export function registerProjectTools(
   server.registerTool(
     "get_team",
     {
-      description: "取得特定團隊的詳細資訊。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "取得特定團隊的詳細資訊。若本次對話中已呼叫過此工具取得相同 project + team 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         teamId: z.string().min(1).describe("團隊 ID 或名稱"),

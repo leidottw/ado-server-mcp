@@ -1,19 +1,21 @@
 import type { IWikiApi } from "azure-devops-node-api/WikiApi";
-import * as WikiInterfaces from "azure-devops-node-api/interfaces/WikiInterfaces";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as WikiInterfaces from "azure-devops-node-api/interfaces/WikiInterfaces";
 import * as z from "zod";
-import {
-  getWikisOutputSchema,
-  getWikiPageOutputSchema,
-  listWikiPagesOutputSchema,
-  createWikiPageOutputSchema,
-  updateWikiPageOutputSchema,
-  deleteWikiPageOutputSchema,
-  searchWikiOutputSchema,
-  normalizeAzureDevOpsDates,
-  ensureArray,
-} from "../types/azureDevOps.js";
+
 import { deliver, readInputFile } from "../fileHandoff.js";
+import {
+  createWikiPageOutputSchema,
+  deleteWikiPageOutputSchema,
+  ensureArray,
+  getWikiPageOutputSchema,
+  getWikisOutputSchema,
+  listWikiPagesOutputSchema,
+  normalizeAzureDevOpsDates,
+  searchWikiOutputSchema,
+  updateWikiPageOutputSchema,
+} from "../types/azureDevOps.js";
 
 const envSource =
   typeof Bun !== "undefined" && typeof Bun.env !== "undefined"
@@ -180,10 +182,13 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         `${project}/_apis/wiki/wikis/${wikiIdentifier}/pages?path=${encodedPath}&includeContent=${includeContent}`,
       );
       const pageObj = page as Record<string, unknown>;
-      const pageContent = typeof pageObj["content"] === "string" ? pageObj["content"] : "";
+      const pageContent =
+        typeof pageObj["content"] === "string" ? pageObj["content"] : "";
 
       if (includeContent && pageContent) {
-        const sanitizedPath = (path as string).replace(/\//g, "_").replace(/^_/, "");
+        const sanitizedPath = (path as string)
+          .replace(/\//g, "_")
+          .replace(/^_/, "");
         const handoff = await deliver(pageContent, {
           output,
           toolName: "get_wiki_page",
@@ -193,7 +198,13 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         if ("savedToFile" in handoff) {
           const { savedToFile: _, ...outputFile } = handoff;
           const { content: _c, ...rest } = pageObj;
-          return { content: [], structuredContent: normalizeAzureDevOpsDates({ ...rest, outputFile }) };
+          return {
+            content: [],
+            structuredContent: normalizeAzureDevOpsDates({
+              ...rest,
+              outputFile,
+            }),
+          };
         }
       }
       return {
@@ -218,12 +229,7 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
           .default("/")
           .describe("起始路徑（預設為根目錄 /）"),
         recursionLevel: z
-          .enum([
-            "none",
-            "oneLevel",
-            "oneLevelPlusNestedEmptyFolders",
-            "full",
-          ])
+          .enum(["none", "oneLevel", "oneLevelPlusNestedEmptyFolders", "full"])
           .optional()
           .default("full")
           .describe("遞迴深度（預設 full 取得完整樹狀結構）"),
@@ -253,8 +259,7 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       const { data: page } = await wikiRestGet(
         `${project}/_apis/wiki/wikis/${wikiIdentifier}/pages?path=${encodedPath}&recursionLevel=${recursionLevel}`,
       );
-      const result =
-        detail === "minimal" ? stripWikiPageFull(page) : page;
+      const result = detail === "minimal" ? stripWikiPageFull(page) : page;
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates(result),
@@ -272,12 +277,24 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         project: z.string().min(1).describe("專案名稱或 ID"),
         wikiIdentifier: z.string().min(1).describe("Wiki ID 或 Wiki 名稱"),
         path: z.string().min(1).describe("頁面路徑，例如 /NewPage"),
-        content: z.string().optional().describe("頁面 Markdown 內容（內容已存在於本機檔案時請改用 contentFile 以節省 output token）"),
-        contentFile: z.string().optional().describe("【優先使用】本機檔案絕對路徑；內容已在本機檔案時必須用此參數取代 content，工具直接讀檔，可大幅節省 output token"),
+        content: z
+          .string()
+          .optional()
+          .describe(
+            "頁面 Markdown 內容（內容已存在於本機檔案時請改用 contentFile 以節省 output token）",
+          ),
+        contentFile: z
+          .string()
+          .optional()
+          .describe(
+            "【優先使用】本機檔案絕對路徑；內容已在本機檔案時必須用此參數取代 content，工具直接讀檔，可大幅節省 output token",
+          ),
         branch: z
           .string()
           .optional()
-          .describe("目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）"),
+          .describe(
+            "目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）",
+          ),
       },
       outputSchema: createWikiPageOutputSchema,
     },
@@ -296,8 +313,11 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       contentFile?: string;
       branch?: string;
     }) => {
-      const resolvedContent = contentFile ? readInputFile(contentFile) : content;
-      if (!resolvedContent) throw new Error("content 或 contentFile 必須提供其一");
+      const resolvedContent = contentFile
+        ? readInputFile(contentFile)
+        : content;
+      if (!resolvedContent)
+        throw new Error("content 或 contentFile 必須提供其一");
       const encodedPath = encodeURIComponent(path);
       const versionSuffix = branch
         ? `&versionDescriptor.version=${encodeURIComponent(branch)}&versionDescriptor.versionType=branch`
@@ -323,16 +343,30 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         project: z.string().min(1).describe("專案名稱或 ID"),
         wikiIdentifier: z.string().min(1).describe("Wiki ID 或 Wiki 名稱"),
         path: z.string().min(1).describe("頁面路徑"),
-        content: z.string().optional().describe("更新後的 Markdown 內容（內容已存在於本機檔案時請改用 contentFile 以節省 output token）"),
-        contentFile: z.string().optional().describe("【優先使用】本機檔案絕對路徑；內容已在本機檔案時必須用此參數取代 content，工具直接讀檔，可大幅節省 output token"),
+        content: z
+          .string()
+          .optional()
+          .describe(
+            "更新後的 Markdown 內容（內容已存在於本機檔案時請改用 contentFile 以節省 output token）",
+          ),
+        contentFile: z
+          .string()
+          .optional()
+          .describe(
+            "【優先使用】本機檔案絕對路徑；內容已在本機檔案時必須用此參數取代 content，工具直接讀檔，可大幅節省 output token",
+          ),
         version: z
           .string()
           .optional()
-          .describe("頁面版本（ETag），由 get_wiki_page 的回應 header 取得；不填則不帶版本鎖定"),
+          .describe(
+            "頁面版本（ETag），由 get_wiki_page 的回應 header 取得；不填則不帶版本鎖定",
+          ),
         branch: z
           .string()
           .optional()
-          .describe("目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）"),
+          .describe(
+            "目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）",
+          ),
       },
       outputSchema: updateWikiPageOutputSchema,
     },
@@ -353,14 +387,18 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
       version?: string;
       branch?: string;
     }) => {
-      const resolvedContent = contentFile ? readInputFile(contentFile) : content;
-      if (!resolvedContent) throw new Error("content 或 contentFile 必須提供其一");
+      const resolvedContent = contentFile
+        ? readInputFile(contentFile)
+        : content;
+      if (!resolvedContent)
+        throw new Error("content 或 contentFile 必須提供其一");
       const encodedPath = encodeURIComponent(path);
       const versionSuffix = branch
         ? `&versionDescriptor.version=${encodeURIComponent(branch)}&versionDescriptor.versionType=branch`
         : "";
       const pageGetPath = `${project}/_apis/wiki/wikis/${wikiIdentifier}/pages?path=${encodedPath}${versionSuffix}`;
-      const eTag = version ?? (await wikiRestGet(pageGetPath)).eTag ?? undefined;
+      const eTag =
+        version ?? (await wikiRestGet(pageGetPath)).eTag ?? undefined;
       const page = await wikiRestPut(
         pageGetPath,
         { content: resolvedContent },
@@ -385,11 +423,10 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         branch: z
           .string()
           .optional()
-          .describe("目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）"),
-        comment: z
-          .string()
-          .optional()
-          .describe("刪除時的 commit 說明（選填）"),
+          .describe(
+            "目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）",
+          ),
+        comment: z.string().optional().describe("刪除時的 commit 說明（選填）"),
       },
       outputSchema: deleteWikiPageOutputSchema,
     },

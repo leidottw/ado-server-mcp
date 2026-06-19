@@ -1,43 +1,51 @@
-import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
+import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
 import type * as WorkItemTrackingInterfaces from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
+import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
+
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
 import {
-  WorkItemExpand,
   CommentSortOrder,
+  WorkItemExpand,
   WorkItemTypeFieldsExpandLevel,
 } from "azure-devops-node-api/interfaces/WorkItemTrackingInterfaces";
-import type * as CoreInterfaces from "azure-devops-node-api/interfaces/CoreInterfaces";
-import * as VSSInterfaces from "azure-devops-node-api/interfaces/common/VSSInterfaces";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
-import * as os from "os";
-import * as fs from "fs";
-import * as path from "path";
+
+import { deliver } from "../fileHandoff.js";
 import {
+  addWorkItemAttachmentOutputSchema,
+  addWorkItemCommentOutputSchema,
+  createWorkItemOutputSchema,
+  deleteWorkItemOutputSchema,
+  downloadWorkItemAttachmentOutputSchema,
   ensureArray,
   ensureRecord,
-  normalizeAzureDevOpsDates,
-  createWorkItemOutputSchema,
   getWorkItemCommentsOutputSchema,
+  getWorkItemRevisionsOutputSchema,
   getWorkItemTypeFieldsOutputSchema,
+  listQueriesOutputSchema,
+  normalizeAzureDevOpsDates,
   queryWorkItemsOutputSchema,
   updateWorkItemOutputSchema,
   workItemOutputSchema,
   workItemTypesOutputSchema,
-  addWorkItemCommentOutputSchema,
-  downloadWorkItemAttachmentOutputSchema,
-  addWorkItemAttachmentOutputSchema,
-  listQueriesOutputSchema,
-  getWorkItemRevisionsOutputSchema,
-  deleteWorkItemOutputSchema,
 } from "../types/azureDevOps.js";
-import { deliver } from "../fileHandoff.js";
 
 const workItemIdSchema = z.union([
   z.string().regex(/^\d+$/).transform(Number),
   z.number().int().positive(),
 ]);
 
-type WorkItemRow = { id?: number; rev?: number; fields?: Record<string, unknown>; url?: string };
+type WorkItemRow = {
+  id?: number;
+  rev?: number;
+  fields?: Record<string, unknown>;
+  url?: string;
+};
 
 function toRowsFormat(
   items: WorkItemRow[],
@@ -80,7 +88,9 @@ export function registerWorkItemTools(
           .boolean()
           .optional()
           .default(false)
-          .describe("是否回傳 _links（HATEOAS 導覽連結，共 6 個 href），預設 false"),
+          .describe(
+            "是否回傳 _links（HATEOAS 導覽連結，共 6 個 href），預設 false",
+          ),
         includeRelations: z
           .boolean()
           .optional()
@@ -145,7 +155,7 @@ export function registerWorkItemTools(
         fields: z
           .record(z.string(), z.unknown())
           .describe(
-            "欄位 referenceName 與對應值的物件，例如 { \"System.Title\": \"Bug 標題\" }。" +
+            '欄位 referenceName 與對應值的物件，例如 { "System.Title": "Bug 標題" }。' +
               "可先呼叫 get_work_item_type_fields 取得該類型的完整欄位清單（含必填、允許值）。",
           ),
         bypassRules: z.boolean().optional().describe("略過工作項目規則驗證"),
@@ -215,7 +225,7 @@ export function registerWorkItemTools(
           .record(z.string(), z.unknown())
           .optional()
           .describe(
-            "要更新的欄位 referenceName 與對應值的物件，例如 { \"System.Title\": \"新標題\" }。" +
+            '要更新的欄位 referenceName 與對應值的物件，例如 { "System.Title": "新標題" }。' +
               "可先呼叫 get_work_item_type_fields 取得該類型的完整欄位清單（含必填、允許值）。",
           ),
         addRelations: z
@@ -244,7 +254,9 @@ export function registerWorkItemTools(
             }),
           )
           .optional()
-          .describe("要移除的關聯清單，依 url（及選填的 rel）比對現有 relations"),
+          .describe(
+            "要移除的關聯清單，依 url（及選填的 rel）比對現有 relations",
+          ),
         bypassRules: z.boolean().optional().describe("略過工作項目規則驗證"),
         suppressNotifications: z
           .boolean()
@@ -307,7 +319,12 @@ export function registerWorkItemTools(
         }
       }
       if (removeRelations && removeRelations.length > 0) {
-        const existing = await witApi.getWorkItem(id, undefined, undefined, WorkItemExpand.Relations);
+        const existing = await witApi.getWorkItem(
+          id,
+          undefined,
+          undefined,
+          WorkItemExpand.Relations,
+        );
         const existingRelations = existing?.relations ?? [];
         const indices: number[] = [];
         for (const target of removeRelations) {
@@ -498,10 +515,16 @@ export function registerWorkItemTools(
         workItemRelations: workItemRelations.map((rel) => ({
           rel: rel.rel ?? undefined,
           source: rel.source
-            ? { id: rel.source.id ?? undefined, url: rel.source.url ?? undefined }
+            ? {
+                id: rel.source.id ?? undefined,
+                url: rel.source.url ?? undefined,
+              }
             : undefined,
           target: rel.target
-            ? { id: rel.target.id ?? undefined, url: rel.target.url ?? undefined }
+            ? {
+                id: rel.target.id ?? undefined,
+                url: rel.target.url ?? undefined,
+              }
             : undefined,
         })),
       });
@@ -525,7 +548,8 @@ export function registerWorkItemTools(
   server.registerTool(
     "list_work_item_types",
     {
-      description: "列出專案中可用的工作項目類型。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "列出專案中可用的工作項目類型。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
       },
@@ -536,7 +560,9 @@ export function registerWorkItemTools(
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
-          workItemTypes: ensureArray(types).map((t: any) => ({
+          workItemTypes: ensureArray<WorkItemTrackingInterfaces.WorkItemType>(
+            types,
+          ).map((t) => ({
             name: t.name ?? undefined,
             description: t.description ?? undefined,
             url: t.url ?? undefined,
@@ -568,17 +594,20 @@ export function registerWorkItemTools(
       return {
         content: [],
         structuredContent: {
-          fields: ensureArray(fields).map((f: any) => ({
-            name: f.name ?? undefined,
-            referenceName: f.referenceName ?? undefined,
-            alwaysRequired: f.alwaysRequired ?? undefined,
-            helpText: f.helpText ?? undefined,
-            defaultValue: f.defaultValue ?? undefined,
-            allowedValues:
-              f.allowedValues && f.allowedValues.length > 0
-                ? f.allowedValues
-                : undefined,
-          })),
+          fields:
+            ensureArray<WorkItemTrackingInterfaces.WorkItemTypeFieldWithReferences>(
+              fields,
+            ).map((f) => ({
+              name: f.name ?? undefined,
+              referenceName: f.referenceName ?? undefined,
+              alwaysRequired: f.alwaysRequired ?? undefined,
+              helpText: f.helpText ?? undefined,
+              defaultValue: f.defaultValue ?? undefined,
+              allowedValues:
+                f.allowedValues && f.allowedValues.length > 0
+                  ? f.allowedValues
+                  : undefined,
+            })),
         },
       };
     },
@@ -591,12 +620,7 @@ export function registerWorkItemTools(
       inputSchema: {
         id: workItemIdSchema.describe("工作項目編號"),
         project: z.string().min(1).describe("專案名稱或 ID"),
-        top: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe("最多回傳筆數"),
+        top: z.number().int().positive().optional().describe("最多回傳筆數"),
         order: z
           .enum(["asc", "desc"])
           .optional()
@@ -698,7 +722,7 @@ export function registerWorkItemTools(
         tags: z
           .array(z.string().min(1))
           .min(1)
-          .describe("要附加的 Tag 陣列，例如 [\"FrontEnd\", \"模組開發\"]"),
+          .describe('要附加的 Tag 陣列，例如 ["FrontEnd", "模組開發"]'),
       },
       outputSchema: updateWorkItemOutputSchema,
     },
@@ -715,11 +739,7 @@ export function registerWorkItemTools(
           value: merged.join("; "),
         },
       ];
-      const response = await witApi.updateWorkItem(
-        undefined,
-        operations,
-        id,
-      );
+      const response = await witApi.updateWorkItem(undefined, operations, id);
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
@@ -741,10 +761,7 @@ export function registerWorkItemTools(
         "內部執行：取得現有 Tags → 移除指定項目 → 更新。",
       inputSchema: {
         id: workItemIdSchema.describe("工作項目編號"),
-        tags: z
-          .array(z.string().min(1))
-          .min(1)
-          .describe("要移除的 Tag 陣列"),
+        tags: z.array(z.string().min(1)).min(1).describe("要移除的 Tag 陣列"),
       },
       outputSchema: updateWorkItemOutputSchema,
     },
@@ -764,11 +781,7 @@ export function registerWorkItemTools(
           value: remaining.join("; "),
         },
       ];
-      const response = await witApi.updateWorkItem(
-        undefined,
-        operations,
-        id,
-      );
+      const response = await witApi.updateWorkItem(undefined, operations, id);
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
@@ -793,7 +806,9 @@ export function registerWorkItemTools(
         attachmentId: z
           .string()
           .min(1)
-          .describe("附件 GUID，自 work item relations 的 AttachedFile url 取得"),
+          .describe(
+            "附件 GUID，自 work item relations 的 AttachedFile url 取得",
+          ),
         fileName: z
           .string()
           .optional()
@@ -822,8 +837,13 @@ export function registerWorkItemTools(
       fs.mkdirSync(tmpDir, { recursive: true });
 
       const ext = fileName ? path.extname(fileName) : ".bin";
-      const safeName = (fileName ?? attachmentId).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
-      const outPath = path.join(tmpDir, `attachment-${safeName}-${Date.now()}${ext}`);
+      const safeName = (fileName ?? attachmentId)
+        .replace(/[^a-zA-Z0-9._-]/g, "_")
+        .slice(0, 60);
+      const outPath = path.join(
+        tmpDir,
+        `attachment-${safeName}-${Date.now()}${ext}`,
+      );
 
       const resolvedPath = path.resolve(outPath);
       if (!resolvedPath.startsWith(path.resolve(tmpDir))) {
@@ -832,7 +852,9 @@ export function registerWorkItemTools(
 
       const chunks: Buffer[] = [];
       for await (const chunk of stream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+        chunks.push(
+          Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string),
+        );
       }
       const buf = Buffer.concat(chunks);
       fs.writeFileSync(resolvedPath, buf);
@@ -880,7 +902,9 @@ export function registerWorkItemTools(
       const stats = fs.statSync(resolvedPath);
       const MAX_BYTES = 60 * 1024 * 1024;
       if (stats.size > MAX_BYTES) {
-        throw new Error(`檔案超過 60 MB 上限（${stats.size} bytes），無法上傳。`);
+        throw new Error(
+          `檔案超過 60 MB 上限（${stats.size} bytes），無法上傳。`,
+        );
       }
 
       const baseName = path.basename(resolvedPath);
@@ -908,7 +932,15 @@ export function registerWorkItemTools(
           },
         },
       ];
-      await witApi.updateWorkItem(undefined, operations, workItemId, undefined, undefined, undefined, undefined);
+      await witApi.updateWorkItem(
+        undefined,
+        operations,
+        workItemId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
 
       return {
         content: [],
@@ -925,7 +957,8 @@ export function registerWorkItemTools(
   server.registerTool(
     "list_queries",
     {
-      description: "列出專案的共用查詢資料夾與查詢（樹狀結構），可用於取得 queryId 後呼叫 run_query。",
+      description:
+        "列出專案的共用查詢資料夾與查詢（樹狀結構），可用於取得 queryId 後呼叫 run_query。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         depth: z
@@ -953,7 +986,12 @@ export function registerWorkItemTools(
     }) => {
       let items: WorkItemTrackingInterfaces.QueryHierarchyItem[];
       if (folderPath) {
-        const single = await witApi.getQuery(project, folderPath, undefined, depth);
+        const single = await witApi.getQuery(
+          project,
+          folderPath,
+          undefined,
+          depth,
+        );
         items = single ? [single] : [];
       } else {
         items = await witApi.getQueries(project, undefined, depth);
@@ -968,18 +1006,17 @@ export function registerWorkItemTools(
           path: q.path ?? undefined,
           isFolder: q.isFolder ?? undefined,
           hasChildren: q.hasChildren ?? undefined,
-          children: q.children
-            ? q.children.map(mapQueryItem)
-            : undefined,
+          children: q.children ? q.children.map(mapQueryItem) : undefined,
         };
       }
 
       return {
         content: [],
         structuredContent: {
-          queries: ensureArray<WorkItemTrackingInterfaces.QueryHierarchyItem>(
-            items,
-          ).map(mapQueryItem),
+          queries:
+            ensureArray<WorkItemTrackingInterfaces.QueryHierarchyItem>(
+              items,
+            ).map(mapQueryItem),
         },
       };
     },
@@ -1039,7 +1076,12 @@ export function registerWorkItemTools(
       output?: "inline" | "file" | "auto";
     }) => {
       const teamContext: CoreInterfaces.TeamContext = { project };
-      const wiqlResult = await witApi.queryById(queryId, teamContext, undefined, top);
+      const wiqlResult = await witApi.queryById(
+        queryId,
+        teamContext,
+        undefined,
+        top,
+      );
 
       const workItems = ensureArray<{ id?: number; url?: string }>(
         wiqlResult.workItems,
@@ -1069,7 +1111,14 @@ export function registerWorkItemTools(
         const fetched: WorkItemRow[] = [];
         for (let i = 0; i < ids.length; i += chunkSize) {
           const chunk = ids.slice(i, i + chunkSize);
-          const items = await witApi.getWorkItems(chunk, fieldsParam, undefined, undefined, undefined, project);
+          const items = await witApi.getWorkItems(
+            chunk,
+            fieldsParam,
+            undefined,
+            undefined,
+            undefined,
+            project,
+          );
           for (const item of ensureArray(items)) {
             const wi = item as WorkItemRow;
             fetched.push({
@@ -1100,8 +1149,18 @@ export function registerWorkItemTools(
         })),
         workItemRelations: workItemRelations.map((rel) => ({
           rel: rel.rel ?? undefined,
-          source: rel.source ? { id: rel.source.id ?? undefined, url: rel.source.url ?? undefined } : undefined,
-          target: rel.target ? { id: rel.target.id ?? undefined, url: rel.target.url ?? undefined } : undefined,
+          source: rel.source
+            ? {
+                id: rel.source.id ?? undefined,
+                url: rel.source.url ?? undefined,
+              }
+            : undefined,
+          target: rel.target
+            ? {
+                id: rel.target.id ?? undefined,
+                url: rel.target.url ?? undefined,
+              }
+            : undefined,
         })),
       });
 
@@ -1118,7 +1177,10 @@ export function registerWorkItemTools(
           return { content: [], structuredContent: { ...runBase, outputFile } };
         }
       }
-      return { content: [], structuredContent: { ...runBase, workItemDetails } };
+      return {
+        content: [],
+        structuredContent: { ...runBase, workItemDetails },
+      };
     },
   );
 
@@ -1165,7 +1227,8 @@ export function registerWorkItemTools(
       const updateList =
         ensureArray<WorkItemTrackingInterfaces.WorkItemUpdate>(updates);
 
-      const fieldSet = fields && fields.length > 0 ? new Set(fields) : undefined;
+      const fieldSet =
+        fields && fields.length > 0 ? new Set(fields) : undefined;
 
       const revisions = updateList
         .map((u) => {
@@ -1177,7 +1240,8 @@ export function registerWorkItemTools(
           if (u.fields) {
             for (const [key, update] of Object.entries(u.fields)) {
               if (fieldSet && !fieldSet.has(key)) continue;
-              const fu = update as WorkItemTrackingInterfaces.WorkItemFieldUpdate;
+              const fu =
+                update as WorkItemTrackingInterfaces.WorkItemFieldUpdate;
               const oldVal = fu.oldValue;
               const newVal = fu.newValue;
               changedFields[key] = {
@@ -1200,9 +1264,11 @@ export function registerWorkItemTools(
             revisedBy: u.revisedBy
               ? {
                   displayName:
-                    (u.revisedBy as unknown as { displayName?: string }).displayName ?? undefined,
+                    (u.revisedBy as unknown as { displayName?: string })
+                      .displayName ?? undefined,
                   uniqueName:
-                    (u.revisedBy as unknown as { uniqueName?: string }).uniqueName ?? undefined,
+                    (u.revisedBy as unknown as { uniqueName?: string })
+                      .uniqueName ?? undefined,
                 }
               : undefined,
             revisedDate: u.revisedDate ?? undefined,

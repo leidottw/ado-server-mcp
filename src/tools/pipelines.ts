@@ -1,22 +1,24 @@
 import type { IBuildApi } from "azure-devops-node-api/BuildApi";
 import type { IGitApi } from "azure-devops-node-api/GitApi";
-import * as BuildInterfaces from "azure-devops-node-api/interfaces/BuildInterfaces";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as BuildInterfaces from "azure-devops-node-api/interfaces/BuildInterfaces";
 import * as z from "zod";
+
+import { deliver } from "../fileHandoff.js";
 import {
+  cancelBuildOutputSchema,
   ensureArray,
-  normalizeAzureDevOpsDates,
   getBuildLogsOutputSchema,
   getBuildTimelineOutputSchema,
-  cancelBuildOutputSchema,
   getPipelineDefinitionOutputSchema,
   getPipelineDefinitionYamlOutputSchema,
-  listPipelinesOutputSchema,
   getPipelineRunOutputSchema,
   listPipelineRunsOutputSchema,
+  listPipelinesOutputSchema,
+  normalizeAzureDevOpsDates,
   queuePipelineOutputSchema,
 } from "../types/azureDevOps.js";
-import { deliver } from "../fileHandoff.js";
 
 export function registerPipelineTools(
   server: McpServer,
@@ -26,7 +28,8 @@ export function registerPipelineTools(
   server.registerTool(
     "list_pipelines",
     {
-      description: "列出專案中的 CI/CD Pipeline 定義（Build Definitions）。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "列出專案中的 CI/CD Pipeline 定義（Build Definitions）。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         name: z
@@ -305,7 +308,8 @@ export function registerPipelineTools(
   server.registerTool(
     "get_pipeline_definition_yaml",
     {
-      description: "取得 Pipeline 定義的完整 YAML 內容。若本次對話中已呼叫過此工具取得相同 project + definitionId 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+      description:
+        "取得 Pipeline 定義的完整 YAML 內容。若本次對話中已呼叫過此工具取得相同 project + definitionId 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         definitionId: z.number().int().positive().describe("Pipeline 定義 ID"),
@@ -358,7 +362,10 @@ export function registerPipelineTools(
         const { savedToFile: _, ...outputFile } = result;
         return { content: [], structuredContent: { outputFile } };
       }
-      return { content: [], structuredContent: { yaml: result.text || undefined } };
+      return {
+        content: [],
+        structuredContent: { yaml: result.text || undefined },
+      };
     },
   );
 
@@ -384,13 +391,17 @@ export function registerPipelineTools(
           .int()
           .min(0)
           .optional()
-          .describe("起始行號（1-based），僅在提供 logId 時有效；提供 grep 時忽略"),
+          .describe(
+            "起始行號（1-based），僅在提供 logId 時有效；提供 grep 時忽略",
+          ),
         endLine: z
           .number()
           .int()
           .min(0)
           .optional()
-          .describe("結束行號（1-based），僅在提供 logId 時有效；提供 grep 時忽略"),
+          .describe(
+            "結束行號（1-based），僅在提供 logId 時有效；提供 grep 時忽略",
+          ),
         grep: z
           .string()
           .optional()
@@ -479,9 +490,14 @@ export function registerPipelineTools(
                 const ctxEnd = Math.min(allLines.length - 1, i + ctx);
                 for (let j = ctxStart; j <= ctxEnd; j++) {
                   const ctxLine = allLines[j];
-                  if (j !== i && ctxLine !== undefined) contextLines.push(ctxLine);
+                  if (j !== i && ctxLine !== undefined)
+                    contextLines.push(ctxLine);
                 }
-                matchItems.push({ line: i + 1, text: line, context: contextLines });
+                matchItems.push({
+                  line: i + 1,
+                  text: line,
+                  context: contextLines,
+                });
               }
             }
           }
@@ -493,7 +509,13 @@ export function registerPipelineTools(
         }
 
         const lines = ensureArray<string>(
-          await buildApi.getBuildLogLines(project, buildId, logId, startLine, endLine),
+          await buildApi.getBuildLogLines(
+            project,
+            buildId,
+            logId,
+            startLine,
+            endLine,
+          ),
         );
         const logText = lines.join("\n");
         const handoff = await deliver(logText, {

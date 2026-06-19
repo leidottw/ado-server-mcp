@@ -1,20 +1,21 @@
 import type { IGitApi } from "azure-devops-node-api/GitApi";
-import type { IWorkItemTrackingApi } from "azure-devops-node-api/WorkItemTrackingApi";
-import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import * as z from "zod";
+import * as GitInterfaces from "azure-devops-node-api/interfaces/GitInterfaces";
 import { createTwoFilesPatch } from "diff";
+import * as z from "zod";
+
+import { deliver } from "../fileHandoff.js";
 import {
   ensureArray,
-  normalizeAzureDevOpsDates,
-  getPullRequestDiffOutputSchema,
+  getCommitOutputSchema,
   getFileContentOutputSchema,
+  getPullRequestDiffOutputSchema,
   listBranchesOutputSchema,
   listCommitsOutputSchema,
-  getCommitOutputSchema,
+  normalizeAzureDevOpsDates,
   searchCodeOutputSchema,
 } from "../types/azureDevOps.js";
-import { deliver } from "../fileHandoff.js";
 
 const envSource =
   typeof Bun !== "undefined" && typeof Bun.env !== "undefined"
@@ -24,13 +25,49 @@ const ADO_BASE_URL = (envSource.AZURE_DEVOPS_URL ?? "").replace(/\/+$/, "");
 const ADO_TOKEN = envSource.AZURE_DEVOPS_TOKEN ?? "";
 
 const BINARY_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg", "webp",
-  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-  "zip", "tar", "gz", "7z", "rar", "jar", "war",
-  "exe", "dll", "so", "dylib", "bin", "obj",
-  "ttf", "otf", "woff", "woff2", "eot",
-  "mp3", "mp4", "avi", "mov", "mkv", "wav", "flac",
-  "db", "sqlite", "lock",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "bmp",
+  "ico",
+  "svg",
+  "webp",
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "zip",
+  "tar",
+  "gz",
+  "7z",
+  "rar",
+  "jar",
+  "war",
+  "exe",
+  "dll",
+  "so",
+  "dylib",
+  "bin",
+  "obj",
+  "ttf",
+  "otf",
+  "woff",
+  "woff2",
+  "eot",
+  "mp3",
+  "mp4",
+  "avi",
+  "mov",
+  "mkv",
+  "wav",
+  "flac",
+  "db",
+  "sqlite",
+  "lock",
 ]);
 
 const MAX_FILE_BYTES = 1024 * 1024; // 1 MB
@@ -63,7 +100,10 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-async function searchRestPost(path: string, body: unknown): Promise<Record<string, unknown>> {
+async function searchRestPost(
+  path: string,
+  body: unknown,
+): Promise<Record<string, unknown>> {
   const sep = path.includes("?") ? "&" : "?";
   const url = `${ADO_BASE_URL}/${path}${sep}api-version=7.0`;
   const resp = await fetch(url, {
@@ -72,7 +112,9 @@ async function searchRestPost(path: string, body: unknown): Promise<Record<strin
     body: JSON.stringify(body),
   });
   if (resp.status === 404) {
-    throw new Error("此 ADO Server 未安裝 Search extension，無法使用 search_code。");
+    throw new Error(
+      "此 ADO Server 未安裝 Search extension，無法使用 search_code。",
+    );
   }
   if (!resp.ok) {
     const text = await resp.text();
@@ -81,11 +123,7 @@ async function searchRestPost(path: string, body: unknown): Promise<Record<strin
   return resp.json() as Promise<Record<string, unknown>>;
 }
 
-export function registerGitTools(
-  server: McpServer,
-  gitApi: IGitApi,
-  witApi: IWorkItemTrackingApi,
-): void {
+export function registerGitTools(server: McpServer, gitApi: IGitApi): void {
   // ── get_pull_request_diff ──────────────────────────────────────────────────
   server.registerTool(
     "get_pull_request_diff",
@@ -132,7 +170,11 @@ export function registerGitTools(
       maxFiles?: number;
       output?: "inline" | "file" | "auto";
     }) => {
-      const pr = await gitApi.getPullRequest(repositoryId, pullRequestId, project);
+      const pr = await gitApi.getPullRequest(
+        repositoryId,
+        pullRequestId,
+        project,
+      );
       if (!pr) {
         return {
           content: [],
@@ -178,8 +220,7 @@ export function registerGitTools(
 
       if (filePath) {
         changeEntries = changeEntries.filter(
-          (c) =>
-            (c.item as { path?: string } | undefined)?.path === filePath,
+          (c) => (c.item as { path?: string } | undefined)?.path === filePath,
         );
       } else {
         changeEntries = changeEntries.slice(0, maxFiles);
@@ -225,7 +266,10 @@ export function registerGitTools(
             );
             baseContent = await streamToString(baseStream);
             if (baseContent.length > MAX_FILE_BYTES) {
-              skippedFiles.push({ path: itemPath, reason: `檔案過大：${baseContent.length} bytes` });
+              skippedFiles.push({
+                path: itemPath,
+                reason: `檔案過大：${baseContent.length} bytes`,
+              });
               continue;
             }
             if (hasBinaryContent(baseContent)) {
@@ -252,7 +296,10 @@ export function registerGitTools(
             );
             headContent = await streamToString(headStream);
             if (headContent.length > MAX_FILE_BYTES) {
-              skippedFiles.push({ path: itemPath, reason: `檔案過大：${headContent.length} bytes` });
+              skippedFiles.push({
+                path: itemPath,
+                reason: `檔案過大：${headContent.length} bytes`,
+              });
               continue;
             }
             if (hasBinaryContent(headContent)) {
@@ -267,7 +314,7 @@ export function registerGitTools(
         }
 
         const originalPath = isRename
-          ? (entry as { originalPath?: string }).originalPath ?? itemPath
+          ? ((entry as { originalPath?: string }).originalPath ?? itemPath)
           : itemPath;
 
         const patchHeader = isRename
@@ -285,7 +332,9 @@ export function registerGitTools(
 
         if (isRename && patchHeader) {
           // patch 已含 --- +++ header，只加 rename 提示行
-          diffParts.push(`diff --git a${originalPath} b${itemPath}\n${patchHeader}${patch.split("\n").slice(2).join("\n")}`);
+          diffParts.push(
+            `diff --git a${originalPath} b${itemPath}\n${patchHeader}${patch.split("\n").slice(2).join("\n")}`,
+          );
         } else {
           diffParts.push(patch);
         }
@@ -302,7 +351,11 @@ export function registerGitTools(
         const { savedToFile: _, ...outputFile } = handoff;
         return {
           content: [],
-          structuredContent: { outputFile, fileCount: changeEntries.length, skippedFiles },
+          structuredContent: {
+            outputFile,
+            fileCount: changeEntries.length,
+            skippedFiles,
+          },
         };
       }
       return {
@@ -334,7 +387,9 @@ export function registerGitTools(
         refType: z
           .enum(["branch", "commit", "tag"])
           .optional()
-          .describe("明示 ref 的類型；省略時自動判斷（40 碼 hex 視為 commit，否則 branch）"),
+          .describe(
+            "明示 ref 的類型；省略時自動判斷（40 碼 hex 視為 commit，否則 branch）",
+          ),
         startLine: z
           .number()
           .int()
@@ -385,10 +440,9 @@ export function registerGitTools(
         } else if (refType === "branch") {
           versionType = GitInterfaces.GitVersionType.Branch;
         } else {
-          versionType =
-            /^[0-9a-f]{40}$/i.test(ref)
-              ? GitInterfaces.GitVersionType.Commit
-              : GitInterfaces.GitVersionType.Branch;
+          versionType = /^[0-9a-f]{40}$/i.test(ref)
+            ? GitInterfaces.GitVersionType.Commit
+            : GitInterfaces.GitVersionType.Branch;
         }
         versionDescriptor = { version: ref, versionType };
       }
@@ -411,7 +465,12 @@ export function registerGitTools(
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
           return {
-            content: [{ type: "text" as const, text: `找不到檔案，請確認 path 與 ref：${path}` }],
+            content: [
+              {
+                type: "text" as const,
+                text: `找不到檔案，請確認 path 與 ref：${path}`,
+              },
+            ],
             isError: true,
             structuredContent: { totalLines: 0 },
           };
@@ -427,13 +486,16 @@ export function registerGitTools(
 
       if (startLine !== undefined) {
         const start = Math.max(1, startLine);
-        const end = endLine !== undefined ? Math.min(endLine, totalLines) : totalLines;
+        const end =
+          endLine !== undefined ? Math.min(endLine, totalLines) : totalLines;
         returnedContent = allLines.slice(start - 1, end).join("\n");
         returnedRange = { start, end };
       }
 
       const ext = path.includes(".") ? (path.split(".").pop() ?? "txt") : "txt";
-      const repoKey = repositoryId.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 20);
+      const repoKey = repositoryId
+        .replace(/[^a-zA-Z0-9._-]/g, "_")
+        .slice(0, 20);
       const pathKey = path.replace(/\//g, "_").replace(/^_/, "").slice(0, 40);
       const handoff = await deliver(returnedContent, {
         output,
@@ -443,7 +505,10 @@ export function registerGitTools(
       });
       if ("savedToFile" in handoff) {
         const { savedToFile: _, ...outputFile } = handoff;
-        return { content: [], structuredContent: { outputFile, totalLines, returnedRange } };
+        return {
+          content: [],
+          structuredContent: { outputFile, totalLines, returnedRange },
+        };
       }
       return {
         content: [],
@@ -483,7 +548,8 @@ export function registerGitTools(
     }) => {
       const refsFilter = filter ? `heads/${filter}` : "heads/";
       const repo = await gitApi.getRepository(repositoryId, project);
-      const defaultBranch = repo?.defaultBranch?.replace("refs/heads/", "") ?? "";
+      const defaultBranch =
+        repo?.defaultBranch?.replace("refs/heads/", "") ?? "";
 
       const refs = await gitApi.getRefs(
         repositoryId,
@@ -513,7 +579,8 @@ export function registerGitTools(
                     uniqueName: r.creator.uniqueName ?? undefined,
                   }
                 : undefined,
-              isDefault: name !== undefined ? name === defaultBranch : undefined,
+              isDefault:
+                name !== undefined ? name === defaultBranch : undefined,
             };
           }),
         },
@@ -525,16 +592,17 @@ export function registerGitTools(
   server.registerTool(
     "list_commits",
     {
-      description: "列出儲存庫的 commit 歷程，可依分支、路徑、作者、日期範圍篩選。",
+      description:
+        "列出儲存庫的 commit 歷程，可依分支、路徑、作者、日期範圍篩選。",
       inputSchema: {
         repositoryId: z.string().min(1).describe("儲存庫 ID 或名稱"),
         project: z.string().optional().describe("專案名稱或 ID"),
         branch: z.string().optional().describe("分支名稱"),
-        itemPath: z
+        itemPath: z.string().optional().describe("只回傳觸及此路徑的 commits"),
+        author: z
           .string()
           .optional()
-          .describe("只回傳觸及此路徑的 commits"),
-        author: z.string().optional().describe("依作者 alias 或 displayName 篩選"),
+          .describe("依作者 alias 或 displayName 篩選"),
         fromDate: z
           .string()
           .optional()
@@ -599,23 +667,25 @@ export function registerGitTools(
       return {
         content: [],
         structuredContent: normalizeAzureDevOpsDates({
-          commits: ensureArray<GitInterfaces.GitCommitRef>(commits).map((c) => ({
-            commitId: c.commitId ?? undefined,
-            comment:
-              c.comment && c.comment.length > 400
-                ? c.comment.slice(0, 400) + "…"
-                : (c.comment ?? undefined),
-            author: c.author
-              ? {
-                  name: c.author.name ?? undefined,
-                  email: c.author.email ?? undefined,
-                  date: c.author.date ?? undefined,
-                }
-              : undefined,
-            changeCounts: c.changeCounts
-              ? (c.changeCounts as unknown as Record<string, number>)
-              : undefined,
-          })),
+          commits: ensureArray<GitInterfaces.GitCommitRef>(commits).map(
+            (c) => ({
+              commitId: c.commitId ?? undefined,
+              comment:
+                c.comment && c.comment.length > 400
+                  ? c.comment.slice(0, 400) + "…"
+                  : (c.comment ?? undefined),
+              author: c.author
+                ? {
+                    name: c.author.name ?? undefined,
+                    email: c.author.email ?? undefined,
+                    date: c.author.date ?? undefined,
+                  }
+                : undefined,
+              changeCounts: c.changeCounts
+                ? (c.changeCounts as unknown as Record<string, number>)
+                : undefined,
+            }),
+          ),
         }),
       };
     },
@@ -659,7 +729,9 @@ export function registerGitTools(
     }) => {
       const commit = await gitApi.getCommit(commitId, repositoryId, project);
 
-      let changes: Array<{ path: string | undefined; changeType: unknown }> | undefined;
+      let changes:
+        | Array<{ path: string | undefined; changeType: unknown }>
+        | undefined;
       if (includeChanges) {
         const commitChanges = await gitApi.getChanges(
           commitId,
@@ -720,12 +792,7 @@ export function registerGitTools(
           .max(100)
           .optional()
           .describe("最多回傳筆數，預設 20，上限 100"),
-        skip: z
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe("跳過筆數（分頁用）"),
+        skip: z.number().int().min(0).optional().describe("跳過筆數（分頁用）"),
       },
       outputSchema: searchCodeOutputSchema,
     },
@@ -768,17 +835,19 @@ export function registerGitTools(
           path: item.path ?? undefined,
           repository:
             typeof item.repository === "object" && item.repository !== null
-              ? (item.repository as Record<string, unknown>).name ?? undefined
+              ? ((item.repository as Record<string, unknown>).name ?? undefined)
               : undefined,
           project:
             typeof item.project === "object" && item.project !== null
-              ? (item.project as Record<string, unknown>).name ?? undefined
+              ? ((item.project as Record<string, unknown>).name ?? undefined)
               : undefined,
           matches: ensureArray(
             (item.matches as Record<string, unknown> | undefined)?.content,
           ).map((m) => {
             const match = m as Record<string, unknown>;
-            return { line: match.charOffset !== undefined ? undefined : undefined };
+            return {
+              line: match.charOffset !== undefined ? undefined : undefined,
+            };
           }),
         };
       });
