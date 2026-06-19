@@ -106,7 +106,7 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
     "get_wikis",
     {
       description:
-        "取得專案（或 Collection）底下所有 Wiki 的列表。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
+        "取得專案（或 Collection）底下所有 Wiki 的列表。回傳結果中的 type 欄位標示該 Wiki 是 projectWiki 或 codeWiki：呼叫 create_wiki_page / update_wiki_page / delete_wiki_page 前務必先確認此欄位，codeWiki 一律要帶 branch 參數，projectWiki 一律不要帶。若本次對話中已呼叫過此工具取得相同 project 的結果，請直接使用 context 內的資料，勿重複呼叫。",
       inputSchema: {
         project: z
           .string()
@@ -149,7 +149,11 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
         path: z
           .string()
           .min(1)
-          .describe("頁面路徑，例如 /MyPage 或 /Parent/Child"),
+          .describe(
+            "Wiki 頁面的邏輯路徑（用空白分隔詞語，不含 .md 副檔名），例如 /MyPage 或 /Parent Page/Child Page。" +
+              "不確定確切路徑時，先呼叫 list_wiki_pages 取得頁面樹再使用其中的 path 欄位；" +
+              "切勿直接套用 search_wiki 回傳結果中的 path / fileName（那是底層 git 檔案路徑，格式不同，會以連字號取代空白並含 .md，直接帶入會 404）。",
+          ),
         includeContent: z
           .boolean()
           .optional()
@@ -227,7 +231,10 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
           .string()
           .optional()
           .default("/")
-          .describe("起始路徑（預設為根目錄 /）"),
+          .describe(
+            "起始路徑（預設為根目錄 /），格式為 Wiki 頁面的邏輯路徑（空白分隔，不含 .md），" +
+              "不是底層 git 檔案路徑；不確定時留空從根目錄展開即可，不要套用 search_wiki 回傳的 path / fileName。",
+          ),
         recursionLevel: z
           .enum(["none", "oneLevel", "oneLevelPlusNestedEmptyFolders", "full"])
           .optional()
@@ -272,11 +279,17 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
     "create_wiki_page",
     {
       description:
-        "在指定 Wiki 中建立新頁面（若頁面已存在會覆蓋）。CodeWiki 必須提供 branch。",
+        "在指定 Wiki 中建立新頁面（若頁面已存在會覆蓋）。建立前請先以 get_wikis 確認該 wiki 的 type：" +
+        "codeWiki 必須提供 branch，否則 API 會回 400；projectWiki 不要提供 branch。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         wikiIdentifier: z.string().min(1).describe("Wiki ID 或 Wiki 名稱"),
-        path: z.string().min(1).describe("頁面路徑，例如 /NewPage"),
+        path: z
+          .string()
+          .min(1)
+          .describe(
+            "Wiki 頁面的邏輯路徑，例如 /NewPage（空白分隔，不含 .md），與 list_wiki_pages 回傳的 path 格式一致。",
+          ),
         content: z
           .string()
           .optional()
@@ -293,7 +306,8 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
           .string()
           .optional()
           .describe(
-            "目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）",
+            "目標分支名稱，例如 main。是否需填寫取決於 wiki 類型，請先用 get_wikis 確認：" +
+              "type 為 codeWiki 必填；type 為 projectWiki 不要填。",
           ),
       },
       outputSchema: createWikiPageOutputSchema,
@@ -338,11 +352,19 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
     "update_wiki_page",
     {
       description:
-        "更新 Wiki 中現有頁面的內容。需提供 version（ETag）以確保樂觀鎖定，可由 get_wiki_page 回傳取得；若設為 * 則強制覆蓋。CodeWiki 必須提供 branch。",
+        "更新 Wiki 中現有頁面的內容。更新前請先以 get_wikis 確認該 wiki 的 type 來決定要帶哪個鎖定參數，兩者互斥，不要同時帶：" +
+        "type 為 projectWiki → 帶 version（ETag，由 get_wiki_page 回應取得；不確定可填 * 強制覆蓋）；" +
+        "type 為 codeWiki → 改帶 branch（例如 main），不要帶 version（codeWiki 不支援 ETag 樂觀鎖定，帶 version 會回 400）。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         wikiIdentifier: z.string().min(1).describe("Wiki ID 或 Wiki 名稱"),
-        path: z.string().min(1).describe("頁面路徑"),
+        path: z
+          .string()
+          .min(1)
+          .describe(
+            "Wiki 頁面的邏輯路徑（空白分隔，不含 .md），與 list_wiki_pages 回傳的 path 格式一致，" +
+              "不要套用 search_wiki 回傳結果中的 path / fileName（那是底層 git 檔案路徑）。",
+          ),
         content: z
           .string()
           .optional()
@@ -359,13 +381,14 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
           .string()
           .optional()
           .describe(
-            "頁面版本（ETag），由 get_wiki_page 的回應 header 取得；不填則不帶版本鎖定",
+            "僅用於 projectWiki：頁面版本（ETag），由 get_wiki_page 的回應 header 取得；填 * 可強制覆蓋。" +
+              "若 wiki 是 codeWiki，不要帶此參數，改帶 branch（codeWiki 帶 version 會回 400 versionType 錯誤）。",
           ),
         branch: z
           .string()
           .optional()
           .describe(
-            "目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）",
+            "僅用於 codeWiki：目標分支名稱，例如 main，codeWiki 必填。projectWiki 不要填此參數，改用 version。",
           ),
       },
       outputSchema: updateWikiPageOutputSchema,
@@ -415,16 +438,25 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
   server.registerTool(
     "delete_wiki_page",
     {
-      description: "刪除 Wiki 中的指定頁面。CodeWiki 必須提供 branch。",
+      description:
+        "刪除 Wiki 中的指定頁面。刪除前請先以 get_wikis 確認該 wiki 的 type：" +
+        "codeWiki 必須提供 branch，否則 API 會回 400；projectWiki 不要提供 branch。",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         wikiIdentifier: z.string().min(1).describe("Wiki ID 或 Wiki 名稱"),
-        path: z.string().min(1).describe("頁面路徑"),
+        path: z
+          .string()
+          .min(1)
+          .describe(
+            "Wiki 頁面的邏輯路徑（空白分隔，不含 .md），與 list_wiki_pages 回傳的 path 格式一致，" +
+              "不要套用 search_wiki 回傳結果中的 path / fileName（那是底層 git 檔案路徑）。",
+          ),
         branch: z
           .string()
           .optional()
           .describe(
-            "目標分支名稱（CodeWiki 必填，例如 main；ProjectWiki 可省略）",
+            "目標分支名稱，例如 main。是否需填寫取決於 wiki 類型，請先用 get_wikis 確認：" +
+              "type 為 codeWiki 必填；type 為 projectWiki 不要填。",
           ),
         comment: z.string().optional().describe("刪除時的 commit 說明（選填）"),
       },
@@ -465,7 +497,10 @@ export function registerWikiTools(server: McpServer, wikiApi: IWikiApi): void {
   server.registerTool(
     "search_wiki",
     {
-      description: "在 Wiki 中搜尋關鍵字，回傳符合的頁面清單。",
+      description:
+        "在 Wiki 中搜尋關鍵字，回傳符合的頁面清單。注意：回傳結果中的 path / fileName 是底層 git 檔案路徑" +
+        "（連字號分隔、含 .md 副檔名），不是 get_wiki_page / list_wiki_pages / update_wiki_page / delete_wiki_page 等" +
+        "工具所需的頁面邏輯路徑，不要直接拿來當這些工具的 path 參數使用；需要正確路徑時請改用 list_wiki_pages 查頁面樹。",
       inputSchema: {
         searchText: z.string().min(1).describe("搜尋關鍵字"),
         projectName: z
