@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `create_work_item` 新增 `parentId` 參數：建立時直接掛上 `System.LinkTypes.Hierarchy-Reverse` 父子關聯，不需再呼叫一次 `update_work_item`
+
 ### Changed
 
 - Wiki 相關工具（`get_wiki_page`、`list_wiki_pages`、`create_wiki_page`、`update_wiki_page`、`delete_wiki_page`、`search_wiki`、`get_wikis`）的 description 補充說明：頁面邏輯路徑與 `search_wiki` 回傳的底層 git 檔案路徑格式不同不可混用；`version`（ETag）僅用於 projectWiki、`branch` 僅用於 codeWiki，呼叫前應先以 `get_wikis` 的 `type` 欄位判斷

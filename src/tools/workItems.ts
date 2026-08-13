@@ -148,7 +148,8 @@ export function registerWorkItemTools(
   server.registerTool(
     "create_work_item",
     {
-      description: "建立新的工作項目，使用 On-Premise 所需的 JSON Patch 格式",
+      description:
+        "建立新的工作項目，使用 On-Premise 所需的 JSON Patch 格式。可用 parentId 於建立時直接指定父工作項目，不需再呼叫 update_work_item",
       inputSchema: {
         project: z.string().min(1).describe("專案名稱或 ID"),
         type: z.string().min(1).describe("工作項目類型，例如 Bug 或 Task"),
@@ -157,6 +158,11 @@ export function registerWorkItemTools(
           .describe(
             '欄位 referenceName 與對應值的物件，例如 { "System.Title": "Bug 標題" }。' +
               "可先呼叫 get_work_item_type_fields 取得該類型的完整欄位清單（含必填、允許值）。",
+          ),
+        parentId: workItemIdSchema
+          .optional()
+          .describe(
+            "父工作項目編號，建立時一併掛上 Hierarchy-Reverse 父子關聯",
           ),
         bypassRules: z.boolean().optional().describe("略過工作項目規則驗證"),
         suppressNotifications: z
@@ -170,12 +176,14 @@ export function registerWorkItemTools(
       project,
       type,
       fields,
+      parentId,
       bypassRules,
       suppressNotifications,
     }: {
       project: string;
       type: string;
       fields: Record<string, unknown>;
+      parentId?: number;
       bypassRules?: boolean;
       suppressNotifications?: boolean;
     }) => {
@@ -188,6 +196,21 @@ export function registerWorkItemTools(
           : `/fields/${fieldKey}`,
         value,
       }));
+      if (parentId !== undefined) {
+        const parent = await witApi.getWorkItem(parentId);
+        if (!parent?.url) {
+          throw new Error(`找不到父工作項目 ${parentId} 或 API 未回傳 url。`);
+        }
+        operations.push({
+          op: VSSInterfaces.Operation.Add,
+          path: "/relations/-",
+          value: {
+            rel: "System.LinkTypes.Hierarchy-Reverse",
+            url: parent.url,
+            attributes: {},
+          },
+        });
+      }
       const response = await witApi.createWorkItem(
         undefined,
         operations,

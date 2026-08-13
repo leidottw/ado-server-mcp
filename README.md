@@ -7,7 +7,7 @@
 ### 工作項管理
 
 - `get_work_item` - 取得單一工作項目詳細資料
-- `create_work_item` - 建立新的工作項目
+- `create_work_item` - 建立新的工作項目（可用 `parentId` 直接指定父工作項目）
 - `update_work_item` - 更新工作項目欄位或工作流程狀態
 - `delete_work_item` - 將工作項目軟刪除至資源回收筒
 - `query_work_items` - 使用 WIQL 查詢工作項目；`format: "rows"` 以欄名 + 二維陣列回傳節省 token；`output` 控制大型結果是否寫入暫存檔
