@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.11.0-beta.1] - 2026-08-13
+
 ### Added
 
 - `create_work_item` 新增 `parentId` 參數：建立時直接掛上 `System.LinkTypes.Hierarchy-Reverse` 父子關聯，不需再呼叫一次 `update_work_item`
